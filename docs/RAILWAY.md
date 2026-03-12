@@ -24,11 +24,20 @@
 
 ## 4. Web-сервис + автосбор
 
-Основной сервис запускает `server.py`:
-- Отдаёт `200 OK` на `/` и `/health`
+**Start Command** (в Settings → Deploy):
+```bash
+uvicorn api.app:app --host 0.0.0.0 --port $PORT
+```
+
+Основной сервис — FastAPI (`api.app`):
+- `/` и `/health` — health check
+- `/docs` — Swagger UI
+- `/api/v1/markets`, `/api/v1/trades`, `/api/v1/status` — данные из БД
 - **Автоматически собирает данные** в фоне: при старте и каждые 15 мин
 
 Интервал: `COLLECT_INTERVAL_SEC=900` (по умолчанию). Для более частого сбора задайте `600` (10 мин) или `300` (5 мин).
+
+Альтернатива (без Swagger): `python server.py`
 
 ## 5. Cron Job (опционально)
 
