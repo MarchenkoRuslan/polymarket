@@ -9,6 +9,9 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# New hourly format: data/data/polymarket_{table}_{YYYY-MM-DD}T{HH}.parquet
+PMXT_DATA_PATH = "data/data"
+
 
 def load_pmxt_parquet(
     base_url: str,
@@ -17,7 +20,7 @@ def load_pmxt_parquet(
     table: str,
 ) -> pd.DataFrame | None:
     """
-    Load Parquet file from PMXT archive.
+    Load Parquet file from PMXT archive (legacy daily format).
     dataset: 'Polymarket'
     table: 'orderbook', 'trades', etc.
     date_str: 'YYYY-MM-DD'
@@ -29,6 +32,38 @@ def load_pmxt_parquet(
             resp = client.get(url, timeout=60)
             if resp.status_code != 200:
                 logger.warning("PMXT %s: %s", url, resp.status_code)
+                return None
+            df = pd.read_parquet(io.BytesIO(resp.content))
+            return df
+    except Exception as e:
+        logger.warning("PMXT load error %s: %s", url, e)
+        return None
+
+
+def load_pmxt_parquet_hourly(
+    base_url: str,
+    table: str,
+    date_str: str,
+    hour: int,
+) -> pd.DataFrame | None:
+    """
+    Load hourly Parquet from PMXT archive (new format).
+    table: 'orderbook' or 'trades'
+    date_str: 'YYYY-MM-DD'
+    hour: 0-23
+    """
+    filename = f"polymarket_{table}_{date_str}T{hour:02d}.parquet"
+    path = f"{PMXT_DATA_PATH}/{filename}"
+    url = urljoin(base_url.rstrip("/") + "/", path)
+    try:
+        with httpx.Client() as client:
+            resp = client.get(url, timeout=120)
+            if resp.status_code != 200:
+                logger.debug("PMXT %s: %s", url, resp.status_code)
+                return None
+            ct = (resp.headers.get("content-type") or "").lower()
+            if "html" in ct or resp.content[:4] == b"<!DO":
+                logger.warning("PMXT %s: got HTML instead of Parquet (archive URL may have changed)", url[:80])
                 return None
             df = pd.read_parquet(io.BytesIO(resp.content))
             return df
@@ -53,11 +88,20 @@ def _parse_ts(raw_ts):
 
 def _get_ts_field(row):
     """Get timestamp field from row, checking multiple possible column names."""
-    for key in ("timestamp", "ts", "t"):
+    for key in ("timestamp", "ts", "t", "time"):
         val = row.get(key)
         if val is not None:
             return val
     return None
+
+
+def _get_market_id(row, market_id_col: str = "market") -> str:
+    """Get market_id from row with fallbacks for various PMXT column names."""
+    for key in (market_id_col, "market_id", "condition_id", "market", "conditionId"):
+        val = row.get(key)
+        if val is not None and str(val).strip():
+            return str(val)
+    return ""
 
 
 def trades_to_rows(df: pd.DataFrame, market_id_col: str = "market") -> list[dict]:
@@ -68,8 +112,10 @@ def trades_to_rows(df: pd.DataFrame, market_id_col: str = "market") -> list[dict
     for _, row in df.iterrows():
         raw_ts = _get_ts_field(row)
         ts = _parse_ts(raw_ts)
-        market_id = str(row.get(market_id_col, row.get("market_id", "")))
-        price = float(row.get("price", 0))
+        market_id = _get_market_id(row, market_id_col)
+        if not market_id:
+            continue
+        price = float(row.get("price", row.get("outcome_price", 0)))
         size = float(row.get("size", row.get("volume", 0)))
         side = str(row.get("side", "buy"))[:4]
         rows.append({"ts": ts, "market_id": market_id, "price": price, "size": size, "side": side})
@@ -86,14 +132,36 @@ def orderbook_to_rows(
     for _, row in df.iterrows():
         raw_ts = _get_ts_field(row)
         ts = _parse_ts(raw_ts)
-        market_id = str(row.get(market_id_col, row.get("market_id", "")))
-        bid_price = float(row.get("bid_price", row.get("best_bid", 0)))
+        market_id = _get_market_id(row, market_id_col)
+        if not market_id:
+            continue
+        bid_price = float(row.get("bid_price", row.get("best_bid", row.get("bid", 0))))
         bid_qty = float(row.get("bid_qty", row.get("bid_size", 0)))
-        ask_price = float(row.get("ask_price", row.get("best_ask", 0)))
+        ask_price = float(row.get("ask_price", row.get("best_ask", row.get("ask", 0))))
         ask_qty = float(row.get("ask_qty", row.get("ask_size", 0)))
         rows.append({
             "ts": ts, "market_id": market_id,
             "bid_price": bid_price, "bid_qty": bid_qty,
             "ask_price": ask_price, "ask_qty": ask_qty,
         })
+    return rows
+
+
+def orderbook_to_trade_rows(df: pd.DataFrame, market_id_col: str = "market") -> list[dict]:
+    """Create synthetic trade rows from orderbook (mid-price) for pipelines that need trades."""
+    if df is None or df.empty:
+        return []
+    rows = []
+    for _, row in df.iterrows():
+        raw_ts = _get_ts_field(row)
+        ts = _parse_ts(raw_ts)
+        market_id = _get_market_id(row, market_id_col)
+        if not market_id:
+            continue
+        bid = float(row.get("bid_price", row.get("best_bid", row.get("bid", 0))))
+        ask = float(row.get("ask_price", row.get("best_ask", row.get("ask", 0))))
+        mid = (bid + ask) / 2 if (bid and ask) else bid or ask
+        if mid <= 0 or mid >= 1:
+            continue
+        rows.append({"ts": ts, "market_id": market_id, "price": mid, "size": 1.0, "side": "buy"})
     return rows

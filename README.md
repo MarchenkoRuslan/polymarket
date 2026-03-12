@@ -96,11 +96,11 @@ python -m services.collector.main
 
 ### PMXT (исторические Parquet)
 
-```bash
-python scripts/load_pmxt.py --start 2025-01-01 --days 7
+```powershell
+.\run.ps1 pmxt --start 2026-03-10 --hours 6
 ```
 
-Архив archive.pmxt.dev может быть временно недоступен.
+Поддерживается почасовой формат архива. Если архив недоступен — используйте `.\run.ps1 collect` и `.\run.ps1 warmup`.
 
 ## Конфигурация
 
