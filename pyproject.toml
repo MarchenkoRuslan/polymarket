@@ -1,0 +1,20 @@
+[project]
+name = "polymarket"
+version = "0.1.0"
+description = "Algorithmic trading system for Polymarket prediction markets"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = ["db/migrations", ".git", "__pycache__"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore::DeprecationWarning:sqlalchemy.engine.default",
+]
