@@ -5,18 +5,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from api.routes import router
-from server import collector_loop, init_db
+from server import init_db, pipeline_loop
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: init DB, start collector thread. Shutdown: none."""
+    """Startup: init DB, start pipeline thread. Shutdown: none."""
     init_db()
     import threading
 
-    t = threading.Thread(target=collector_loop, daemon=True)
+    t = threading.Thread(target=pipeline_loop, daemon=True)
     t.start()
     logger.info("App ready, listening for requests")
     yield

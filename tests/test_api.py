@@ -14,10 +14,19 @@ def client(tmp_path):
     db_file = tmp_path / "test.db"
     os.environ["DATABASE_URL"] = f"sqlite:///{db_file}"
 
-    # Recreate db.engine with new URL (must do before api import)
     import importlib
+    import config.settings
+    importlib.reload(config.settings)
+    import config
+    importlib.reload(config)
     import db
     importlib.reload(db)
+    import server
+    importlib.reload(server)
+    import api.routes
+    importlib.reload(api.routes)
+    import api.app
+    importlib.reload(api.app)
 
     schema_path = Path(__file__).resolve().parents[1] / "db" / "schema_sqlite.sql"
     schema = schema_path.read_text(encoding="utf-8")
@@ -29,7 +38,7 @@ def client(tmp_path):
         conn.commit()
 
     def init_db_mock():
-        pass  # schema already applied above
+        pass
 
     with patch("api.app.init_db", side_effect=init_db_mock):
         from api.app import app
@@ -76,11 +85,34 @@ def test_trades_returns_json(client):
     assert "total" in data
 
 
+def test_orderbook_returns_json(client):
+    """GET /api/v1/orderbook returns JSON with items and total."""
+    r = client.get("/api/v1/orderbook")
+    assert r.status_code == 200
+    data = r.json()
+    assert "items" in data
+    assert "total" in data
+    assert isinstance(data["items"], list)
+
+
+def test_signals_returns_json(client):
+    """GET /api/v1/signals returns JSON with items and total."""
+    r = client.get("/api/v1/signals")
+    assert r.status_code == 200
+    data = r.json()
+    assert "items" in data
+    assert "total" in data
+    assert isinstance(data["items"], list)
+
+
 def test_status_returns_json(client):
-    """GET /api/v1/status returns JSON with db_ok, markets, trades."""
+    """GET /api/v1/status returns JSON with db_ok, markets, trades, orderbook, features, signals."""
     r = client.get("/api/v1/status")
     assert r.status_code == 200
     data = r.json()
     assert "db_ok" in data
     assert "markets" in data
     assert "trades" in data
+    assert "orderbook" in data
+    assert "features" in data
+    assert "signals" in data
