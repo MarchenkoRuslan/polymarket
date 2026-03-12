@@ -23,10 +23,16 @@ def _extract_list(data: Any) -> list[dict]:
 class PolymarketClient:
     """Async client for Polymarket REST API."""
 
-    def __init__(self, gamma_url: str, clob_url: str, rate_limit_delay: float = 0.1):
+    def __init__(
+        self,
+        gamma_url: str,
+        clob_url: str,
+        rate_limit_delay: float | None = None,
+    ):
         self.gamma_url = gamma_url.rstrip("/")
         self.clob_url = clob_url.rstrip("/")
-        self._delay = rate_limit_delay
+        # ~100 req/min => ~0.6s between requests; use 0.1 as default
+        self._delay = rate_limit_delay if rate_limit_delay is not None else (60.0 / 100)
 
     async def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
         await asyncio.sleep(self._delay)

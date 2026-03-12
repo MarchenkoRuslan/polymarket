@@ -20,6 +20,14 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _parse_int(name: str, default: str) -> int:
+    try:
+        return int(os.getenv(name, default))
+    except (TypeError, ValueError):
+        return int(default)
+
+
 if HAS_PROM:
     orders_placed = Counter("polymarket_orders_placed_total", "Orders placed")
     orders_rejected = Counter("polymarket_orders_rejected_total", "Orders rejected by risk")
@@ -48,6 +56,7 @@ def run():
             size = position_size(capital, pred, win_loss_ratio=2.0, config=config)
             if size <= 0:
                 continue
+            # Note: market_id may differ from token_id; real orders need token from Gamma API
             order = place_order(
                 token_id=market_id,
                 side="buy",
@@ -70,8 +79,12 @@ def run():
 def main():
     logger.info("Execution Bot starting")
     if HAS_PROM:
-        start_http_server(8000)
-        logger.info("Prometheus metrics on :8000")
+        port = _parse_int("PROMETHEUS_PORT", "8000")
+        try:
+            start_http_server(port)
+            logger.info("Prometheus metrics on :%d", port)
+        except OSError as e:
+            logger.warning("Prometheus metrics server failed (port %d): %s", port, e)
     run()
     logger.info("Execution Bot finished")
 

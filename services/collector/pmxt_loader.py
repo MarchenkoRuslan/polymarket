@@ -1,7 +1,7 @@
 """Load historical data from PMXT Parquet archive."""
 import io
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urljoin
 
 import httpx
@@ -47,7 +47,7 @@ def trades_to_rows(df: pd.DataFrame, market_id_col: str = "market") -> list[dict
         if hasattr(ts, "to_pydatetime"):
             ts = ts.to_pydatetime()
         elif isinstance(ts, (int, float)):
-            ts = datetime.utcfromtimestamp(ts)
+            ts = datetime.fromtimestamp(ts, tz=timezone.utc)
         market_id = str(row.get(market_id_col, row.get("market_id", "")))
         price = float(row.get("price", 0))
         size = float(row.get("size", row.get("volume", 0)))
@@ -68,7 +68,7 @@ def orderbook_to_rows(
         if hasattr(ts, "to_pydatetime"):
             ts = ts.to_pydatetime()
         elif isinstance(ts, (int, float)):
-            ts = datetime.utcfromtimestamp(ts)
+            ts = datetime.fromtimestamp(ts, tz=timezone.utc)
         market_id = str(row.get(market_id_col, row.get("market_id", "")))
         bid_price = float(row.get("bid_price", row.get("best_bid", 0)))
         bid_qty = float(row.get("bid_qty", row.get("bid_size", 0)))

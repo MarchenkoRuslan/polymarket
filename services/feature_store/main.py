@@ -50,14 +50,12 @@ def run(session):
             continue
         df = compute_all(df)
         rows = to_feature_rows(df, mid)
+        stmt = text("""
+            INSERT INTO features (market_id, ts, feature_name, feature_value)
+            VALUES (:market_id, :ts, :feature_name, :feature_value)
+        """)
         for r in rows:
-            session.execute(
-                text("""
-                    INSERT INTO features (market_id, ts, feature_name, feature_value)
-                    VALUES (:market_id, :ts, :feature_name, :feature_value)
-                """),
-                r,
-            )
+            session.execute(stmt, r)
         session.commit()
         logger.info("Features for %s: %d rows", mid[:16], len(rows))
 

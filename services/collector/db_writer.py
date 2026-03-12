@@ -87,13 +87,13 @@ def insert_trade(
 
 
 def markets_from_events(events: list[dict]) -> list[dict]:
-    """Extract markets from events (nested structure)."""
+    """Extract markets from events (nested structure). No mutation of input."""
     markets = []
     for ev in events:
         ev_markets = ev.get("markets") or ev.get("market") or []
         if isinstance(ev_markets, dict):
             ev_markets = [ev_markets]
+        event_id = ev.get("id") or ev.get("slug", "")
         for m in ev_markets:
-            m["event_id"] = ev.get("id") or ev.get("slug", "")
-            markets.append(m)
+            markets.append({**m, "event_id": event_id})
     return markets

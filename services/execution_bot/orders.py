@@ -44,17 +44,18 @@ def place_order(
     side: str,
     price: float,
     size: float,
-    dry_run: bool = True,
+    dry_run: bool | None = None,
 ) -> dict[str, Any]:
     """
     Place order via py-clob-client or stub.
-    token_id: outcome token ID (from market clobTokenIds).
+    token_id: outcome token ID (from market clobTokenIds). Note: market_id != token_id.
     side: 'buy' or 'sell'.
-    dry_run: if True, simulate without posting.
+    dry_run: None = use env POLYMARKET_DRY_RUN (default true), True/False override.
     """
-    dry_run = dry_run or os.getenv("POLYMARKET_DRY_RUN", "true").lower() == "true"
+    env_dry = os.getenv("POLYMARKET_DRY_RUN", "true").lower() == "true"
+    effective_dry_run = env_dry if dry_run is None else dry_run
 
-    if dry_run:
+    if effective_dry_run:
         logger.info("DRY RUN: would place %s %.2f @ %.4f token=%s", side, size, price, token_id[:16])
         return {
             "order_id": f"dryrun-{token_id[:8]}",

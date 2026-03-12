@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*$py.class
+*.so
+.Python
 *.egg-info/
 dist/
 build/
@@ -21,13 +24,17 @@ env/
 *.swp
 *.swo
 
-# Testing / Caching
+# Testing / Linting
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
-htmlcov/
 .coverage
+htmlcov/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+logs/
