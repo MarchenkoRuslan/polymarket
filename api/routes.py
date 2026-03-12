@@ -1,9 +1,19 @@
-"""API routes for markets, trades, status."""
+"""API routes for markets, trades, orderbook, signals, status."""
 from sqlalchemy import text
 
 from fastapi import APIRouter, HTTPException
 
-from api.schemas import MarketOut, MarketsList, StatusOut, TradeOut, TradesList
+from api.schemas import (
+    MarketOut,
+    MarketsList,
+    OrderbookList,
+    OrderbookOut,
+    SignalOut,
+    SignalsList,
+    StatusOut,
+    TradeOut,
+    TradesList,
+)
 from db import SessionLocal
 from server import _get_status
 
@@ -92,13 +102,87 @@ def _get_trades(market_id: str | None, limit: int = 100, offset: int = 0) -> Tra
         session.close()
 
 
+def _get_orderbook(market_id: str | None, limit: int = 100, offset: int = 0) -> OrderbookList:
+    session = SessionLocal()
+    try:
+        if market_id:
+            total = session.execute(
+                text("SELECT COUNT(*) FROM orderbook WHERE market_id = :m"),
+                {"m": market_id},
+            ).scalar() or 0
+            rows = session.execute(
+                text(
+                    "SELECT id, ts, market_id, bid_price, bid_qty, ask_price, ask_qty "
+                    "FROM orderbook WHERE market_id = :m ORDER BY ts DESC LIMIT :lim OFFSET :off"
+                ),
+                {"m": market_id, "lim": limit, "off": offset},
+            ).fetchall()
+        else:
+            total = session.execute(text("SELECT COUNT(*) FROM orderbook")).scalar() or 0
+            rows = session.execute(
+                text(
+                    "SELECT id, ts, market_id, bid_price, bid_qty, ask_price, ask_qty "
+                    "FROM orderbook ORDER BY ts DESC LIMIT :lim OFFSET :off"
+                ),
+                {"lim": limit, "off": offset},
+            ).fetchall()
+        items = [
+            OrderbookOut(
+                id=r[0], ts=r[1], market_id=r[2],
+                bid_price=float(r[3]), bid_qty=float(r[4]),
+                ask_price=float(r[5]), ask_qty=float(r[6]),
+            )
+            for r in rows
+        ]
+        return OrderbookList(items=items, total=total)
+    finally:
+        session.close()
+
+
+def _get_signals(market_id: str | None, limit: int = 100, offset: int = 0) -> SignalsList:
+    session = SessionLocal()
+    try:
+        if market_id:
+            total = session.execute(
+                text("SELECT COUNT(*) FROM signals WHERE market_id = :m"),
+                {"m": market_id},
+            ).scalar() or 0
+            rows = session.execute(
+                text(
+                    "SELECT id, ts, market_id, prediction "
+                    "FROM signals WHERE market_id = :m ORDER BY ts DESC LIMIT :lim OFFSET :off"
+                ),
+                {"m": market_id, "lim": limit, "off": offset},
+            ).fetchall()
+        else:
+            total = session.execute(text("SELECT COUNT(*) FROM signals")).scalar() or 0
+            rows = session.execute(
+                text(
+                    "SELECT id, ts, market_id, prediction "
+                    "FROM signals ORDER BY ts DESC LIMIT :lim OFFSET :off"
+                ),
+                {"lim": limit, "off": offset},
+            ).fetchall()
+        items = [
+            SignalOut(id=r[0], ts=r[1], market_id=r[2], prediction=float(r[3]))
+            for r in rows
+        ]
+        return SignalsList(items=items, total=total)
+    finally:
+        session.close()
+
+
 def _get_status_response() -> StatusOut:
     data = _get_status()
     return StatusOut(
         db_ok=data["db_ok"],
         markets=data["markets"],
         trades=data["trades"],
+        orderbook=data.get("orderbook", 0),
+        features=data.get("features", 0),
+        signals=data.get("signals", 0),
         last_collect_error=data.get("last_collect_error"),
+        last_pipeline_error=data.get("last_pipeline_error"),
         db_error=data.get("db_error"),
     )
 
@@ -124,7 +208,19 @@ def list_trades(market_id: str | None = None, limit: int = 100, offset: int = 0)
     return _get_trades(market_id=market_id, limit=limit, offset=offset)
 
 
+@router.get("/orderbook", response_model=OrderbookList)
+def list_orderbook(market_id: str | None = None, limit: int = 100, offset: int = 0):
+    """List orderbook snapshots, optionally filtered by market_id."""
+    return _get_orderbook(market_id=market_id, limit=limit, offset=offset)
+
+
+@router.get("/signals", response_model=SignalsList)
+def list_signals(market_id: str | None = None, limit: int = 100, offset: int = 0):
+    """List ML signals, optionally filtered by market_id."""
+    return _get_signals(market_id=market_id, limit=limit, offset=offset)
+
+
 @router.get("/status", response_model=StatusOut)
 def get_status():
-    """Get DB status and collect error info."""
+    """Get DB status and pipeline error info."""
     return _get_status_response()

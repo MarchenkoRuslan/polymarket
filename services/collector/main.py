@@ -1,5 +1,6 @@
 """Data Collector - fetches market data from Polymarket API and PMXT."""
 import asyncio
+import json
 import logging
 import sys
 from datetime import datetime, timezone
@@ -17,11 +18,51 @@ from services.collector.polymarket_client import PolymarketClient
 from services.collector.db_writer import (
     upsert_market,
     insert_trade,
+    insert_orderbook,
     markets_from_events,
 )
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _parse_outcome_prices(raw) -> float | None:
+    """Parse outcomePrices from Gamma API.
+
+    Handles: str ("0.55"), JSON string ('["0.145","0.855"]'),
+    list (["0.145", "0.855"]), float, int, None.
+    Returns the first outcome price as float, or None if unparseable.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        val = float(raw)
+        return val if 0 < val < 1 else None
+    if isinstance(raw, list):
+        for item in raw:
+            try:
+                val = float(item)
+                if 0 < val < 1:
+                    return val
+            except (TypeError, ValueError):
+                continue
+        return None
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if raw.startswith("["):
+            try:
+                parsed = json.loads(raw)
+                return _parse_outcome_prices(parsed)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        for part in raw.split(","):
+            try:
+                val = float(part.strip().strip('"').strip("'"))
+                if 0 < val < 1:
+                    return val
+            except (ValueError, TypeError):
+                continue
+    return None
 
 
 async def collect_from_api():
@@ -76,16 +117,29 @@ async def collect_from_api():
                 insert_trade(session, mid, ts, price, 1.0, "buy")
                 loaded += 1
             if not history:
-                price_val = m.get("lastTradePrice") or (m.get("outcomePrices") or "0.5")
-                if isinstance(price_val, str):
+                price_val = None
+                last_trade = m.get("lastTradePrice")
+                if last_trade is not None:
                     try:
-                        price_val = float(price_val.split(",")[0].strip())
-                    except (ValueError, IndexError):
-                        price_val = 0.5
-                price_val = float(price_val)
-                if 0 < price_val < 1:
+                        price_val = float(last_trade)
+                    except (TypeError, ValueError):
+                        price_val = None
+                if price_val is None or not (0 < price_val < 1):
+                    price_val = _parse_outcome_prices(m.get("outcomePrices"))
+                if price_val is not None and 0 < price_val < 1:
                     insert_trade(session, mid, now, price_val, 1.0, "buy")
                     loaded += 1
+
+            best_bid = m.get("bestBid")
+            best_ask = m.get("bestAsk")
+            if best_bid is not None and best_ask is not None:
+                try:
+                    bid_p = float(best_bid)
+                    ask_p = float(best_ask)
+                    if 0 < bid_p < 1 and 0 < ask_p < 1:
+                        insert_orderbook(session, mid, now, bid_p, 1.0, ask_p, 1.0)
+                except (TypeError, ValueError):
+                    pass
             await asyncio.sleep(0.1)
         if loaded:
             session.commit()
