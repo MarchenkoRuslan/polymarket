@@ -3,6 +3,7 @@ import logging
 import os
 import threading
 import time
+from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 _last_collect_error = None
@@ -86,6 +87,7 @@ def run_pipeline():
     except Exception as e:
         _last_pipeline_error = str(e)
         logger.warning("Pipeline: features failed, skipping ML")
+        return
     try:
         run_ml()
     except Exception as e:
@@ -145,8 +147,11 @@ def main():
     import uvicorn
     from api.app import app
 
-    # skip lifespan init_db/pipeline since main() already started them
-    app.router.lifespan_context = None  # type: ignore[assignment]
+    @asynccontextmanager
+    async def _noop_lifespan(_app):
+        yield
+
+    app.router.lifespan_context = _noop_lifespan  # type: ignore[assignment]
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
 
