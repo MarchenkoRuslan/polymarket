@@ -5,36 +5,47 @@
 ## Требования
 
 - Python 3.11+
-- Docker и Docker Compose (опционально)
-- PostgreSQL / TimescaleDB
+- Docker и Docker Compose (опционально, для PostgreSQL/TimescaleDB)
 
 ## Быстрый старт
+
+### Запуск без Docker (SQLite)
+
+```powershell
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+.\run.ps1 init
+.\run.ps1 collect
+.\run.ps1 warmup   # ~5 min: накопление истории (15× collect)
+.\run.ps1 features
+.\run.ps1 ml
+.\run.ps1 backtest
+.\run.ps1 bot
+```
+
+Демо-данные: `.\run.ps1 seed` вместо warmup. В `.env` — `DATABASE_URL=sqlite:///polymarket.db`.
 
 ### Локальный запуск (Docker Compose)
 
 ```bash
 cp .env.example .env
+# В .env задать DATABASE_URL=postgresql://polymarket:polymarket@localhost:5432/polymarket
 docker compose up -d db
 # Дождаться готовности БД, затем:
 docker compose up -d
 ```
 
-### Локальная разработка
+### Локальная разработка (PostgreSQL)
 
 ```bash
-python -m venv venv
-venv\Scripts\activate   # Windows
-# source venv/bin/activate  # Linux/macOS
 pip install -r requirements.txt
 cp .env.example .env
-# Запустить PostgreSQL (например: docker compose up -d db)
+# DATABASE_URL=postgresql://...
 alembic upgrade head
 python -m services.collector.main
-python -m services.news_collector.main
-python -m services.feature_store.main
-python -m services.ml_module.main
-python -m services.backtester.main
-python -m services.execution_bot.main
+# и т.д.
 ```
 
 ## Сервисы
@@ -52,15 +63,31 @@ python -m services.execution_bot.main
 
 ## Загрузка данных
 
-### PMXT (исторические данные)
+### Реальные данные (Polymarket API)
+
+Коллектор загружает:
+- **Рынки** — из Gamma API (активные события)
+- **Цены** — из CLOB `prices-history` (если доступно) или текущие `lastTradePrice` из Gamma
+
+```powershell
+.\run.ps1 collect
+```
+
+Запускайте `collect` регулярно (например, раз в час по cron/Task Scheduler), чтобы накопить историю для ML.
+
+### Демо-данные (без API)
+
+```powershell
+.\run.ps1 seed   # 2 рынка, 350 сделок
+```
+
+### PMXT (исторические Parquet)
 
 ```bash
 python scripts/load_pmxt.py --start 2025-01-01 --days 7
 ```
 
-### Polymarket API
-
-Коллектор автоматически загружает markets и trades при запуске `services.collector.main`.
+Архив archive.pmxt.dev может быть временно недоступен.
 
 ## Конфигурация
 
@@ -93,6 +120,12 @@ ruff check .
 - Стресс-тесты: удвоение fee, высокое проскальзывание, волатильность
 
 ## Деплой
+
+### Railway
+
+См. [docs/RAILWAY.md](docs/RAILWAY.md) — web-сервер, PostgreSQL, Cron для сбора данных.
+
+### Docker Compose
 
 1. Настроить `.env` на целевом окружении
 2. `docker compose up -d`

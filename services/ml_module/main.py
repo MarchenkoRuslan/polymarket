@@ -61,11 +61,16 @@ def run():
     """Train baseline model and save signals."""
     session = SessionLocal()
     try:
-        result = session.execute(text("SELECT DISTINCT market_id FROM trades LIMIT 5"))
+        result = session.execute(
+            text("SELECT DISTINCT market_id FROM trades WHERE market_id NOT LIKE '0x_demo%'"),
+        )
         markets = [r[0] for r in result.fetchall()]
-        for mid in markets:
+        if not markets:
+            result = session.execute(text("SELECT DISTINCT market_id FROM trades"))
+            markets = [r[0] for r in result.fetchall()]
+        for mid in markets[:20]:
             df = load_trades_with_target(session, mid)
-            if df.empty or len(df) < 50:
+            if df.empty or len(df) < 10:
                 continue
             available = [c for c in FEATURE_COLS if c in df.columns]
             if not available:
