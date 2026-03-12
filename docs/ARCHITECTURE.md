@@ -9,29 +9,41 @@
          └──────────┬──────────┘
                     ▼
          ┌─────────────────────┐
-         │   PostgreSQL/       │
-         │   TimescaleDB       │
+         │   PostgreSQL /      │
+         │   SQLite            │
          └──────────┬──────────┘
                     │
-         ┌──────────┴──────────┐
-         ▼                     ▼
-┌─────────────────┐   ┌─────────────────┐
-│ Feature Store   │   │   ML Module     │
-│ (MA, RSI, MACD) │   │ (LR, RF, XGB)   │
-└────────┬────────┘   └────────┬────────┘
-         │                     │
-         └──────────┬──────────┘
-                    ▼
-         ┌─────────────────────┐
-         │    Backtester       │
-         │    Execution Bot    │
-         └──────────┬──────────┘
-                    ▼
-         ┌─────────────────────┐
-         │  Polymarket CLOB    │
-         │  (py-clob-client)   │
-         └─────────────────────┘
+    ┌───────────────┼───────────────┐
+    ▼               ▼               ▼
+┌─────────────┐  ┌─────────────┐  ┌─────────────────┐
+│  Web API    │  │ Feature     │  │   ML Module     │
+│  FastAPI    │  │ Store       │  │ (LR, RF, XGB)   │
+│  Swagger    │  │ (MA, RSI)   │  └────────┬────────┘
+│  /api/v1/*  │  └──────┬──────┘           │
+└─────────────┘         └──────────┬───────┘
+                                   ▼
+                        ┌─────────────────────┐
+                        │    Backtester       │
+                        │    Execution Bot    │
+                        └──────────┬──────────┘
+                                   ▼
+                        ┌─────────────────────┐
+                        │  Polymarket CLOB    │
+                        │  (py-clob-client)   │
+                        └─────────────────────┘
 ```
+
+Web API (FastAPI, `/docs`) читает данные из БД и запускает collector в фоне при старте.
+
+### Эндпоинты API
+
+| Путь | Описание |
+|------|----------|
+| `GET /docs` | Swagger UI |
+| `GET /api/v1/markets` | Список рынков (limit, offset) |
+| `GET /api/v1/markets/{id}` | Один рынок |
+| `GET /api/v1/trades` | Сделки (market_id, limit, offset) |
+| `GET /api/v1/status` | db_ok, markets, trades, last_collect_error |
 
 ## Таблицы БД
 

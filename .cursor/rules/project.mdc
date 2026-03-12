@@ -1,0 +1,23 @@
+---
+description: Polymarket Trading System — правила для агента
+globs: 
+alwaysApply: true
+---
+
+# Polymarket Project Rules
+
+Перед изменениями читай **AGENTS.md** — там структура сервисов, БД, правила кода.
+
+## Ключевое
+
+- **Web API**: `api/` (FastAPI), `server.py` (stdlib HTTP, legacy)
+- **Точка входа**: `uvicorn api.app:app` или `python server.py`
+- **БД**: Alembic миграции в `db/migrations/`, `db/schema_sqlite.sql` для локального SQLite
+- **Зависимости**: `requirements-web.txt` для Docker (быстрый билд), `requirements.txt` — полный стек
+- **Линтинг**: `ruff check .`
+
+## Документация
+
+- README.md — быстрый старт, сервисы
+- docs/ARCHITECTURE.md — диаграмма, таблицы, API
+- docs/RAILWAY.md — деплой, 502, requirements-web

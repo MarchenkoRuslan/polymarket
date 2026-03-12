@@ -5,11 +5,11 @@
 ## Требования
 
 - Python 3.11+
-- Docker и Docker Compose (опционально, для PostgreSQL/TimescaleDB)
+- Docker (опционально, для Railway или локального PostgreSQL)
 
 ## Быстрый старт
 
-### Запуск без Docker (SQLite)
+### Web API + сбор данных (рекомендуется)
 
 ```powershell
 python -m venv venv
@@ -17,15 +17,27 @@ python -m venv venv
 pip install -r requirements.txt
 copy .env.example .env
 .\run.ps1 init
+.\run.ps1 seed      # или warmup для реальных данных
+.\run.ps1 server    # FastAPI + Swagger на http://localhost:8000
+```
+
+- **Swagger UI**: http://localhost:8000/docs  
+- **API**: `/api/v1/markets`, `/api/v1/trades`, `/api/v1/status`  
+- Collector запускается в фоне (при старте и каждые 15 мин)
+
+### Полный пайплайн (без web)
+
+```powershell
+.\run.ps1 init
+.\run.ps1 seed      # или warmup
 .\run.ps1 collect
-.\run.ps1 warmup   # ~5 min: накопление истории (15× collect)
 .\run.ps1 features
 .\run.ps1 ml
 .\run.ps1 backtest
 .\run.ps1 bot
 ```
 
-Демо-данные: `.\run.ps1 seed` вместо warmup. В `.env` — `DATABASE_URL=sqlite:///polymarket.db`.
+Демо-данные: `.\run.ps1 seed`. Реальные данные: `.\run.ps1 warmup` (~5 мин).
 
 ### Локальный запуск (Docker Compose)
 
@@ -52,6 +64,7 @@ python -m services.collector.main
 
 | Сервис | Описание |
 |--------|----------|
+| **Web API** | FastAPI, Swagger UI, `/api/v1/markets`, `/api/v1/trades`, `/api/v1/status`. Collector в фоне |
 | `collector` | Сбор данных Polymarket API (Gamma, CLOB) и PMXT Parquet |
 | `news_collector` | Сбор RSS-новостей с фильтрацией по ключевым словам |
 | `feature_store` | Фичи: MA, volatility, RSI, MACD, spread, volume |
@@ -106,6 +119,8 @@ python scripts/load_pmxt.py --start 2025-01-01 --days 7
 | `POLYMARKET_PASSPHRASE` | Пароль для API credentials |
 | `NEWS_KEYWORDS` | Ключевые слова для фильтрации новостей (через запятую) |
 | `RSS_FEEDS` | URL RSS-лент через запятую |
+| `COLLECT_INTERVAL_SEC` | Интервал сбора в фоне (по умолчанию 900 = 15 мин) |
+| `COLLECT_DEFER_SEC` | Задержка перед первым сбором (по умолчанию 5 с) |
 
 ## Тестирование
 
@@ -115,7 +130,7 @@ python -m pytest tests/ -v
 ruff check .
 ```
 
-- Unit-тесты: backtester, features, risk, collector, orders, news
+- Unit-тесты: backtester, features, risk, collector, orders, news, **API** (FastAPI)
 - Интеграционные: конвейер collector → features → ml → backtest (SQLite)
 - Стресс-тесты: удвоение fee, высокое проскальзывание, волатильность
 
@@ -123,7 +138,11 @@ ruff check .
 
 ### Railway
 
-См. [docs/RAILWAY.md](docs/RAILWAY.md) — web-сервер, PostgreSQL, Cron для сбора данных.
+См. [docs/RAILWAY.md](docs/RAILWAY.md):
+
+- FastAPI + Swagger, PostgreSQL, автосбор
+- **Быстрый билд**: Dockerfile + requirements-web.txt (без ML)
+- Cron для сбора, Features/ML, Backtest — при необходимости
 
 ### Docker Compose
 

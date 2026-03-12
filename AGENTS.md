@@ -10,6 +10,8 @@
 
 | Сервис | Путь | Задача |
 |--------|------|--------|
+| **Web API** | `api/` | FastAPI, Swagger UI (`/docs`), эндпоинты `/api/v1/markets`, `/api/v1/trades`, `/api/v1/status`. Lifespan: init_db + collector в фоне |
+| Web Server (legacy) | `server.py` | stdlib HTTP, `/`, `/health`, `/status`. Альтернатива без Swagger |
 | Data Collector | `services/collector/` | Polymarket API (Gamma, CLOB), PMXT Parquet → `markets`, `trades`, `orderbook` |
 | News Collector | `services/news_collector/` | RSS → фильтр по ключевым словам → таблица `news` |
 | Feature Store | `services/feature_store/` | MA, volatility, RSI, MACD, spread, volume → `features` |
@@ -19,8 +21,8 @@
 
 ## База данных
 
-- PostgreSQL / TimescaleDB, подключение через `DATABASE_URL`
-- Схема: `db/schema.sql`, миграции: `db/migrations/`
+- PostgreSQL / SQLite, подключение через `DATABASE_URL`
+- Схема: `db/schema_sqlite.sql` (локально), миграции: `db/migrations/` (Alembic)
 - Таблицы: `markets`, `orderbook`, `trades`, `fee_rates`, `features`, `news`, `signals`, `orders`, `results`
 
 ## Правила при изменении кода
@@ -43,10 +45,13 @@
 ## Запуск
 
 ```bash
-# Docker
-docker compose up -d db && docker compose up -d
+# Web API (FastAPI + Swagger, collector в фоне)
+uvicorn api.app:app --reload --port 8000   # или .\run.ps1 server
 
-# Локально
+# Альтернатива (stdlib HTTP)
+python server.py
+
+# Отдельные сервисы
 python -m services.collector.main
 python -m services.news_collector.main
 python -m services.feature_store.main
@@ -54,6 +59,11 @@ python -m services.ml_module.main
 python -m services.backtester.main
 python -m services.execution_bot.main
 ```
+
+## Зависимости
+
+- **requirements-web.txt** — для Docker/Railway (web + collector). Без sklearn, xgboost, pyarrow, pytest. Быстрый билд.
+- **requirements.txt** — полный стек (ML, тесты). Локально и CI.
 
 ## Тесты
 
@@ -73,5 +83,6 @@ ruff check .
 
 ## Документация
 
-- Архитектура: `docs/ARCHITECTURE.md`
-- README: `README.md`
+- **README.md** — быстрый старт, сервисы, конфигурация
+- **docs/ARCHITECTURE.md** — архитектура, таблицы, фичи, сигналы
+- **docs/RAILWAY.md** — деплой, 502, логи Alembic, пустые таблицы, requirements-web
