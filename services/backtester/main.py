@@ -73,14 +73,21 @@ def main():
                 signals = baseline_always_buy(df)
                 label = "baseline"
             else:
+                df_ts = df.copy()
+                sig_ts = sig_df.copy()
+                df_ts["ts"] = pd.to_datetime(df_ts["ts"])
+                sig_ts["ts"] = pd.to_datetime(sig_ts["ts"])
+                df_sorted = df_ts.sort_values("ts").reset_index(drop=True)
+                sig_sorted = sig_ts.sort_values("ts")
                 merged = pd.merge_asof(
-                    df.sort_values("ts"),
-                    sig_df.sort_values("ts"),
+                    df_sorted,
+                    sig_sorted,
                     on="ts",
                     direction="backward",
                 )
                 signals = merged["signal"].fillna(0).astype(int)
                 label = "ML"
+                df = df_sorted
             bt = run_backtest(df, signals, config)
             logger.info(
                 "[%s] Market %s: ROI=%.2f%%, Sharpe=%.2f, MaxDD=%.2f%%, trades=%d",
