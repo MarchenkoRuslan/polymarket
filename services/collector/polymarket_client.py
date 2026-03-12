@@ -1,6 +1,7 @@
 """Polymarket API client for markets, prices, orderbook, trades."""
 import asyncio
 import logging
+import time
 from typing import Any
 
 import httpx
@@ -21,7 +22,7 @@ def _extract_list(data: Any) -> list[dict]:
 
 
 class PolymarketClient:
-    """Async client for Polymarket REST API."""
+    """Async client for Polymarket REST API with connection pooling."""
 
     def __init__(
         self,
@@ -31,13 +32,34 @@ class PolymarketClient:
     ):
         self.gamma_url = gamma_url.rstrip("/")
         self.clob_url = clob_url.rstrip("/")
-        # ~100 req/min => ~0.6s between requests; use 0.1 as default
         self._delay = rate_limit_delay if rate_limit_delay is not None else (60.0 / 100)
+        self._last_request_time: float = 0
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client and release connections."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        await self.close()
 
     async def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
-        await asyncio.sleep(self._delay)
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            return await client.request(method, url, **kwargs)
+        elapsed = time.monotonic() - self._last_request_time
+        if elapsed < self._delay:
+            await asyncio.sleep(self._delay - elapsed)
+        self._last_request_time = time.monotonic()
+        client = self._get_client()
+        return await client.request(method, url, **kwargs)
 
     async def get_markets(self, limit: int = 100, offset: int = 0, closed: bool = False) -> list[dict]:
         """Fetch markets from Gamma API. Handles pagination."""

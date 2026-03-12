@@ -70,7 +70,7 @@ async def collect_from_api():
     rate_delay = 60.0 / max(API_RATE_LIMIT, 10) if API_RATE_LIMIT else 0.1
     client = PolymarketClient(POLYMARKET_GAMMA_API, POLYMARKET_CLOB_API, rate_limit_delay=rate_delay)
     session = SessionLocal()
-    try:
+    try:  # noqa: SIM117
         events = await client.get_events(active=True, closed=False, limit=50)
         markets = markets_from_events(events)
         for m in markets:
@@ -148,6 +148,7 @@ async def collect_from_api():
         session.rollback()
         logger.exception("Collect error: %s", e)
     finally:
+        await client.close()
         session.close()
 
 

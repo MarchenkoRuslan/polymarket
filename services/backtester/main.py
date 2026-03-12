@@ -1,6 +1,8 @@
 """Backtester - simulates trading on historical data."""
 import logging
 import sys
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -12,6 +14,7 @@ from db import SessionLocal
 from services.backtester.engine import (
     run_backtest,
     BacktestConfig,
+    BacktestResult,
     baseline_always_buy,
 )
 from config import DEFAULT_FEE_BPS
@@ -56,9 +59,28 @@ def load_market_data(session, market_id: str, limit: int = 5000) -> pd.DataFrame
     return df.tail(limit)
 
 
+def save_result(
+    session, market_id: str, bt: BacktestResult, run_id: str,
+) -> None:
+    """Persist backtest result to the results table."""
+    session.execute(
+        text("""
+            INSERT INTO results (ts, market_id, profit, run_id)
+            VALUES (:ts, :market_id, :profit, :run_id)
+        """),
+        {
+            "ts": datetime.now(timezone.utc),
+            "market_id": market_id,
+            "profit": bt.total_return,
+            "run_id": run_id,
+        },
+    )
+
+
 def main():
     logger.info("Backtester starting")
     session = SessionLocal()
+    run_id = uuid.uuid4().hex[:12]
     try:
         result = session.execute(
             text("SELECT DISTINCT market_id FROM trades WHERE market_id NOT LIKE '0x_demo%'")
@@ -100,11 +122,14 @@ def main():
                 label, mid[:16], bt.total_return * 100, bt.sharpe_ratio,
                 bt.max_drawdown * 100, bt.num_trades,
             )
+            save_result(session, mid, bt, run_id)
+        session.commit()
     except Exception as e:
+        session.rollback()
         logger.exception("%s", e)
     finally:
         session.close()
-    logger.info("Backtester finished")
+    logger.info("Backtester finished (run_id=%s)", run_id)
 
 
 if __name__ == "__main__":
