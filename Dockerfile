@@ -15,4 +15,5 @@ COPY . .
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "-m", "services.collector.main"]
+EXPOSE 8000
+CMD ["python", "server.py"]

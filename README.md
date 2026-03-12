@@ -121,6 +121,12 @@ ruff check .
 
 ## Деплой
 
+### Railway
+
+См. [docs/RAILWAY.md](docs/RAILWAY.md) — web-сервер, PostgreSQL, Cron для сбора данных.
+
+### Docker Compose
+
 1. Настроить `.env` на целевом окружении
 2. `docker compose up -d`
 3. Миграции: `docker compose run --rm collector alembic upgrade head`
