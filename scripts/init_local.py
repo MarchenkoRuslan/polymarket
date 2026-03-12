@@ -1,5 +1,4 @@
 """Initialize SQLite database for local dev (no Docker)."""
-import os
 import sys
 from pathlib import Path
 

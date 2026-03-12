@@ -15,11 +15,17 @@ def init_db():
     try:
         from alembic.config import Config
         from alembic import command
-        cfg = Config("alembic.ini")
+
+        root = os.path.dirname(os.path.abspath(__file__))
+        ini_path = os.path.join(root, "alembic.ini")
+        script_location = os.path.join(root, "db", "migrations")
+
+        cfg = Config(ini_path)
+        cfg.set_main_option("script_location", script_location)
         command.upgrade(cfg, "head")
         logger.info("DB migrations applied")
-    except Exception as e:
-        logger.warning("DB init skipped: %s", e)
+    except Exception:
+        logger.exception("DB migrations failed")
 
 
 def run_collect():

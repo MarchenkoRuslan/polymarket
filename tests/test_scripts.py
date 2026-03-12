@@ -1,5 +1,4 @@
 """Tests for scripts - init_local, seed_demo, run_pipeline."""
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
