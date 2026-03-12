@@ -1,8 +1,23 @@
 """Web server for Railway with auto-collect. Health check + background data collection."""
+import logging
 import os
 import threading
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+logger = logging.getLogger(__name__)
+
+
+def init_db():
+    """Run Alembic migrations on startup."""
+    try:
+        from alembic.config import Config
+        from alembic import command
+        cfg = Config("alembic.ini")
+        command.upgrade(cfg, "head")
+        logger.info("DB migrations applied")
+    except Exception as e:
+        logger.warning("DB init skipped: %s", e)
 
 
 def run_collect():
@@ -12,8 +27,7 @@ def run_collect():
         from services.collector.main import collect_from_api
         asyncio.run(collect_from_api())
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).exception("Collect error: %s", e)
+        logger.exception("Collect error: %s", e)
 
 
 def collector_loop():
@@ -41,6 +55,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
+    init_db()
     t = threading.Thread(target=collector_loop, daemon=True)
     t.start()
     port = int(os.environ.get("PORT", 8000))
