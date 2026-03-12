@@ -21,23 +21,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def load_features_wide(session, market_id: str, limit: int = 5000) -> pd.DataFrame:
-    """Load features as wide DataFrame (one row per ts)."""
-    result = session.execute(
-        text("""
-            SELECT ts, feature_name, feature_value FROM features
-            WHERE market_id = :m ORDER BY ts
-        """),
-        {"m": market_id},
-    )
-    rows = result.fetchall()
-    if not rows:
-        return pd.DataFrame()
-    df = pd.DataFrame(rows, columns=["ts", "feature_name", "feature_value"])
-    pivot = df.pivot_table(index="ts", columns="feature_name", values="feature_value")
-    return pivot.tail(limit)
-
-
 def load_trades_with_target(session, market_id: str, limit: int = 5000) -> pd.DataFrame:
     """Load trades and compute target: 1 if price goes up in next period."""
     result = session.execute(
@@ -55,7 +38,7 @@ def load_trades_with_target(session, market_id: str, limit: int = 5000) -> pd.Da
 
 
 def run():
-    """Train baseline model and save signals."""
+    """Train baseline model and save out-of-sample signals only."""
     session = SessionLocal()
     try:
         result = session.execute(
@@ -65,6 +48,10 @@ def run():
         if not markets:
             result = session.execute(text("SELECT DISTINCT market_id FROM trades"))
             markets = [r[0] for r in result.fetchall()]
+
+        session.execute(text("DELETE FROM signals"))
+        session.commit()
+
         for mid in markets[:20]:
             df = load_trades_with_target(session, mid)
             if df.empty or len(df) < 10:
@@ -73,11 +60,25 @@ def run():
             if not available:
                 continue
             X, y = prepare_xy(df, "target")
-            metrics = walk_forward_validate(X, y, n_splits=3, model_type="logistic")
-            logger.info("Market %s: AUC=%.3f P=%.3f R=%.3f", mid[:16], metrics["roc_auc"], metrics["precision"], metrics["recall"])
-            model = train_baseline(X, y, "logistic")
-            proba = model.predict_proba(X)[:, 1]
-            for i, (ts, p) in enumerate(zip(df["ts"], proba)):
+            n_splits = min(5, max(2, len(X) // 10))
+            metrics = walk_forward_validate(X, y, n_splits=n_splits, model_type="logistic")
+            logger.info(
+                "Market %s: AUC=%.3f P=%.3f R=%.3f",
+                mid[:16], metrics["roc_auc"], metrics["precision"], metrics["recall"],
+            )
+
+            # Train on all-but-last chunk, predict only the unseen tail
+            split_idx = int(len(X) * 0.8)
+            if split_idx < 5:
+                continue
+            X_train, X_oos = X.iloc[:split_idx], X.iloc[split_idx:]
+            y_train = y.iloc[:split_idx]
+            if X_oos.empty:
+                continue
+            model = train_baseline(X_train, y_train, "logistic")
+            proba = model.predict_proba(X_oos)[:, 1]
+            ts_oos = df["ts"].iloc[split_idx:]
+            for ts, p in zip(ts_oos, proba):
                 session.execute(
                     text("INSERT INTO signals (ts, market_id, prediction) VALUES (:ts, :m, :p)"),
                     {"ts": ts, "m": mid, "p": float(p)},

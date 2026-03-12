@@ -1,7 +1,6 @@
 """API routes for markets, trades, orderbook, signals, status."""
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
-
-from fastapi import APIRouter, HTTPException
 
 from api.schemas import (
     MarketOut,
@@ -19,8 +18,23 @@ from server import _get_status
 
 router = APIRouter(prefix="/api/v1", tags=["data"])
 
+MAX_PAGE_SIZE = 1000
+
+
+def _clamp_pagination(limit: int, offset: int) -> tuple[int, int]:
+    """Clamp limit to [1, MAX_PAGE_SIZE] and offset to [0, +inf)."""
+    return max(1, min(limit, MAX_PAGE_SIZE)), max(0, offset)
+
+
+def _safe_float(val, default: float = 0.0) -> float:
+    """Convert to float safely, returning default for None."""
+    if val is None:
+        return default
+    return float(val)
+
 
 def _get_markets(limit: int = 100, offset: int = 0) -> MarketsList:
+    limit, offset = _clamp_pagination(limit, offset)
     session = SessionLocal()
     try:
         total = session.execute(text("SELECT COUNT(*) FROM markets")).scalar() or 0
@@ -70,6 +84,7 @@ def _get_market(market_id: str) -> MarketOut | None:
 
 
 def _get_trades(market_id: str | None, limit: int = 100, offset: int = 0) -> TradesList:
+    limit, offset = _clamp_pagination(limit, offset)
     session = SessionLocal()
     try:
         if market_id:
@@ -94,7 +109,10 @@ def _get_trades(market_id: str | None, limit: int = 100, offset: int = 0) -> Tra
                 {"lim": limit, "off": offset},
             ).fetchall()
         items = [
-            TradeOut(id=r[0], ts=r[1], market_id=r[2], price=float(r[3]), size=float(r[4]), side=r[5])
+            TradeOut(
+                id=r[0], ts=r[1], market_id=r[2],
+                price=_safe_float(r[3]), size=_safe_float(r[4]), side=r[5] or "",
+            )
             for r in rows
         ]
         return TradesList(items=items, total=total)
@@ -103,6 +121,7 @@ def _get_trades(market_id: str | None, limit: int = 100, offset: int = 0) -> Tra
 
 
 def _get_orderbook(market_id: str | None, limit: int = 100, offset: int = 0) -> OrderbookList:
+    limit, offset = _clamp_pagination(limit, offset)
     session = SessionLocal()
     try:
         if market_id:
@@ -129,8 +148,8 @@ def _get_orderbook(market_id: str | None, limit: int = 100, offset: int = 0) -> 
         items = [
             OrderbookOut(
                 id=r[0], ts=r[1], market_id=r[2],
-                bid_price=float(r[3]), bid_qty=float(r[4]),
-                ask_price=float(r[5]), ask_qty=float(r[6]),
+                bid_price=_safe_float(r[3]), bid_qty=_safe_float(r[4]),
+                ask_price=_safe_float(r[5]), ask_qty=_safe_float(r[6]),
             )
             for r in rows
         ]
@@ -140,6 +159,7 @@ def _get_orderbook(market_id: str | None, limit: int = 100, offset: int = 0) -> 
 
 
 def _get_signals(market_id: str | None, limit: int = 100, offset: int = 0) -> SignalsList:
+    limit, offset = _clamp_pagination(limit, offset)
     session = SessionLocal()
     try:
         if market_id:
@@ -164,7 +184,7 @@ def _get_signals(market_id: str | None, limit: int = 100, offset: int = 0) -> Si
                 {"lim": limit, "off": offset},
             ).fetchall()
         items = [
-            SignalOut(id=r[0], ts=r[1], market_id=r[2], prediction=float(r[3]))
+            SignalOut(id=r[0], ts=r[1], market_id=r[2], prediction=_safe_float(r[3]))
             for r in rows
         ]
         return SignalsList(items=items, total=total)
@@ -182,13 +202,18 @@ def _get_status_response() -> StatusOut:
         features=data.get("features", 0),
         signals=data.get("signals", 0),
         last_collect_error=data.get("last_collect_error"),
+        last_features_error=data.get("last_features_error"),
+        last_ml_error=data.get("last_ml_error"),
         last_pipeline_error=data.get("last_pipeline_error"),
         db_error=data.get("db_error"),
     )
 
 
 @router.get("/markets", response_model=MarketsList)
-def list_markets(limit: int = 100, offset: int = 0):
+def list_markets(
+    limit: int = Query(default=100, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+):
     """List markets with pagination."""
     return _get_markets(limit=limit, offset=offset)
 
@@ -203,19 +228,31 @@ def get_market(market_id: str):
 
 
 @router.get("/trades", response_model=TradesList)
-def list_trades(market_id: str | None = None, limit: int = 100, offset: int = 0):
+def list_trades(
+    market_id: str | None = None,
+    limit: int = Query(default=100, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+):
     """List trades, optionally filtered by market_id."""
     return _get_trades(market_id=market_id, limit=limit, offset=offset)
 
 
 @router.get("/orderbook", response_model=OrderbookList)
-def list_orderbook(market_id: str | None = None, limit: int = 100, offset: int = 0):
+def list_orderbook(
+    market_id: str | None = None,
+    limit: int = Query(default=100, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+):
     """List orderbook snapshots, optionally filtered by market_id."""
     return _get_orderbook(market_id=market_id, limit=limit, offset=offset)
 
 
 @router.get("/signals", response_model=SignalsList)
-def list_signals(market_id: str | None = None, limit: int = 100, offset: int = 0):
+def list_signals(
+    market_id: str | None = None,
+    limit: int = Query(default=100, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+):
     """List ML signals, optionally filtered by market_id."""
     return _get_signals(market_id=market_id, limit=limit, offset=offset)
 

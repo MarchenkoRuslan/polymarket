@@ -10,6 +10,7 @@ class BacktestConfig:
     initial_capital: float = 10000.0
     fee_bps: int = 30
     slippage_bps: int = 10
+    position_pct: float = 0.10  # fraction of capital per trade (default 10%)
     # Sharpe annualization: sqrt(252) for daily, sqrt(252*24*60) for minute
     sharpe_annualization: float = 252**0.5
 
@@ -48,16 +49,17 @@ def run_backtest(
         sig = signals.iloc[i] if i < len(signals) else 0
 
         if sig == 1 and position == 0 and capital > 0:  # buy
-            trade_val = capital * 0.1
+            trade_val = capital * config.position_pct
+            exec_price = p * (1 + slippage_mult)
             fee = trade_val * fee_mult
-            slip = trade_val * slippage_mult
-            cost = trade_val + fee + slip
+            cost = trade_val + fee
             if cost <= capital:
-                position = trade_val / (p * (1 + slippage_mult))
+                position = trade_val / exec_price
                 capital -= cost
                 num_trades += 1
         elif sig == -1 and position > 0:
-            proceeds = position * p * (1 - slippage_mult)
+            exec_price = p * (1 - slippage_mult)
+            proceeds = position * exec_price
             fee = proceeds * fee_mult
             capital += proceeds - fee
             position = 0

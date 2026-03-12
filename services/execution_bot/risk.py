@@ -10,14 +10,14 @@ class RiskConfig:
     max_positions: int = 10
     stop_loss_pct: float = 0.20  # -20% from entry
     take_profit_pct: float = 1.0  # 100% (e.g. double)
-    kelly_fraction: float = 0.5  # half-Kelly
+    kelly_multiplier: float = 0.5  # half-Kelly
 
 
-def kelly_fraction(p: float, q: float) -> float:
-    """Kelly: f = p - (1-p)/q where q = win/loss ratio."""
-    if q <= 0:
+def kelly_fraction(p: float, b: float) -> float:
+    """Kelly criterion: f = p - (1-p)/b where b = win/loss payout ratio."""
+    if b <= 0:
         return 0.0
-    return max(0.0, p - (1 - p) / q)
+    return max(0.0, p - (1 - p) / b)
 
 
 def position_size(
@@ -28,7 +28,7 @@ def position_size(
 ) -> float:
     """Compute position size using fractional Kelly and limits."""
     config = config or RiskConfig()
-    kf = kelly_fraction(prediction, win_loss_ratio) * config.kelly_fraction
+    kf = kelly_fraction(prediction, win_loss_ratio) * config.kelly_multiplier
     size = capital * min(kf, config.max_position_pct)
     return min(size, capital * config.max_portfolio_pct)
 

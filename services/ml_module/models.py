@@ -19,14 +19,16 @@ FEATURE_COLS = [
     "ma_1h", "ma_5m", "volatility_1h", "roc_1h",
     "volume_1h", "volume_5m",
     "rsi_14", "macd", "macd_signal", "macd_hist",
-    "spread", "spread_bps",
 ]
 
 
 def prepare_xy(df: pd.DataFrame, target_col: str = "target") -> tuple[pd.DataFrame, pd.Series]:
     """Prepare X (features) and y (target). Target = 1 if price goes up."""
     available = [c for c in FEATURE_COLS if c in df.columns]
-    X = df[available].fillna(0)
+    X = df[available].copy()
+    for col in X.columns:
+        median_val = X[col].median()
+        X[col] = X[col].fillna(median_val if pd.notna(median_val) else 0)
     y = df[target_col]
     return X, y
 
