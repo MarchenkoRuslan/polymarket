@@ -1,4 +1,5 @@
 """Web server for Railway with auto-collect. Health check + background data collection."""
+import json
 import logging
 import os
 import threading
@@ -6,6 +7,7 @@ import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 logger = logging.getLogger(__name__)
+_last_collect_error = None
 
 
 def init_db():
@@ -22,11 +24,14 @@ def init_db():
 
 def run_collect():
     """Run collector in thread (blocking)."""
+    global _last_collect_error
     try:
+        _last_collect_error = None
         import asyncio
         from services.collector.main import collect_from_api
         asyncio.run(collect_from_api())
     except Exception as e:
+        _last_collect_error = str(e)
         logger.exception("Collect error: %s", e)
 
 
@@ -39,6 +44,24 @@ def collector_loop():
         run_collect()
 
 
+def _get_status():
+    """Return status dict: db ok, counts, last_error."""
+    out = {"db_ok": False, "markets": 0, "trades": 0, "last_collect_error": _last_collect_error}
+    try:
+        from db import SessionLocal
+        from sqlalchemy import text
+        s = SessionLocal()
+        try:
+            out["markets"] = s.execute(text("SELECT COUNT(*) FROM markets")).scalar() or 0
+            out["trades"] = s.execute(text("SELECT COUNT(*) FROM trades")).scalar() or 0
+            out["db_ok"] = True
+        finally:
+            s.close()
+    except Exception as e:
+        out["db_error"] = str(e)
+    return out
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health" or self.path == "/":
@@ -46,6 +69,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/plain")
             self.end_headers()
             self.wfile.write(b"OK")
+        elif self.path == "/favicon.ico":
+            self.send_response(204)
+            self.end_headers()
+        elif self.path == "/status":
+            body = json.dumps(_get_status(), indent=2).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
         else:
             self.send_response(404)
             self.end_headers()
