@@ -1,6 +1,5 @@
 """Pydantic schemas for API responses."""
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -9,10 +8,10 @@ class MarketOut(BaseModel):
     """Market response model."""
 
     market_id: str
-    event: Optional[str] = None
-    question: Optional[str] = None
-    end_date: Optional[datetime] = None
-    outcome_settled: Optional[bool] = None
+    event: str | None = None
+    question: str | None = None
+    end_date: datetime | None = None
+    outcome_settled: bool | None = None
 
 
 class TradeOut(BaseModel):
@@ -84,6 +83,8 @@ class StatusOut(BaseModel):
     orderbook: int = 0
     features: int = 0
     signals: int = 0
-    last_collect_error: Optional[str] = None
-    last_pipeline_error: Optional[str] = None
-    db_error: Optional[str] = None
+    last_collect_error: str | None = None
+    last_features_error: str | None = None
+    last_ml_error: str | None = None
+    last_pipeline_error: str | None = None
+    db_error: str | None = None

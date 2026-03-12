@@ -49,15 +49,16 @@ def run_backtest(
 
         if sig == 1 and position == 0 and capital > 0:  # buy
             trade_val = capital * 0.1
+            exec_price = p * (1 + slippage_mult)
             fee = trade_val * fee_mult
-            slip = trade_val * slippage_mult
-            cost = trade_val + fee + slip
+            cost = trade_val + fee
             if cost <= capital:
-                position = trade_val / (p * (1 + slippage_mult))
+                position = trade_val / exec_price
                 capital -= cost
                 num_trades += 1
         elif sig == -1 and position > 0:
-            proceeds = position * p * (1 - slippage_mult)
+            exec_price = p * (1 - slippage_mult)
+            proceeds = position * exec_price
             fee = proceeds * fee_mult
             capital += proceeds - fee
             position = 0

@@ -9,14 +9,19 @@ def test_init_db_does_not_crash():
     init_db()
 
 
-def test_run_collect_catches_errors():
-    """run_collect catches exceptions and does not propagate."""
+def test_run_collect_stores_error_and_reraises():
+    """run_collect stores error and re-raises so pipeline can react."""
+    import server
     with patch(
         "services.collector.main.collect_from_api",
         new_callable=AsyncMock,
         side_effect=ValueError("simulated"),
     ):
-        run_collect()
+        try:
+            run_collect()
+        except ValueError:
+            pass
+    assert server._last_collect_error == "simulated"
 
 
 def test_run_pipeline_calls_collect_features_ml():

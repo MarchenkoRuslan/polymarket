@@ -1,8 +1,10 @@
 """FastAPI application with Swagger UI."""
 import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse, Response
 
 from api.routes import router
 from server import init_db, pipeline_loop
@@ -12,14 +14,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: init DB, start pipeline thread. Shutdown: none."""
+    """Startup: init DB, start pipeline thread. Shutdown: cleanup."""
     init_db()
-    import threading
-
     t = threading.Thread(target=pipeline_loop, daemon=True)
     t.start()
     logger.info("App ready, listening for requests")
     yield
+    logger.info("App shutting down")
 
 
 app = FastAPI(
@@ -33,22 +34,18 @@ app = FastAPI(
 @app.get("/", include_in_schema=False)
 def root():
     """Health check."""
-    from fastapi.responses import PlainTextResponse
     return PlainTextResponse("OK")
 
 
 @app.get("/health", include_in_schema=False)
 def health():
     """Health check for load balancers."""
-    from fastapi.responses import PlainTextResponse
     return PlainTextResponse("OK")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     """No favicon."""
-    from fastapi.responses import Response
-
     return Response(status_code=204)
 
 

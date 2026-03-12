@@ -28,18 +28,6 @@ def load_trades_by_market(session, market_id: str, limit: int = 10000) -> pd.Dat
     return df.tail(limit)
 
 
-def save_features(session, rows: list[dict]) -> None:
-    """Batch insert features."""
-    for r in rows:
-        session.execute(
-            text("""
-                INSERT INTO features (market_id, ts, feature_name, feature_value)
-                VALUES (:market_id, :ts, :feature_name, :feature_value)
-            """),
-            r,
-        )
-
-
 def run(session):
     """Compute features for all markets with trades."""
     result = session.execute(
@@ -55,6 +43,10 @@ def run(session):
             continue
         df = compute_all(df)
         rows = to_feature_rows(df, mid)
+        session.execute(
+            text("DELETE FROM features WHERE market_id = :m"),
+            {"m": mid},
+        )
         stmt = text("""
             INSERT INTO features (market_id, ts, feature_name, feature_value)
             VALUES (:market_id, :ts, :feature_name, :feature_value)

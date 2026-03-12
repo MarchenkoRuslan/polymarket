@@ -102,8 +102,8 @@ async def collect_from_api():
             history = []
             try:
                 history = await client.get_prices_history(asset_id, interval="max")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Price history for %s unavailable: %s", asset_id[:16], e)
             for pt in history:
                 ts_raw = pt.get("t") or pt.get("timestamp") or pt.get("ts")
                 if ts_raw is None:

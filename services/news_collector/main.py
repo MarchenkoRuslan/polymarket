@@ -23,20 +23,37 @@ KEYWORDS = os.getenv("NEWS_KEYWORDS", "election,trump,biden,market,polymarket").
 
 
 def ensure_news_table(session) -> None:
-    """Create news table if not exists."""
-    session.execute(text("""
-        CREATE TABLE IF NOT EXISTS news (
-            id SERIAL PRIMARY KEY,
-            ts TIMESTAMP NOT NULL,
-            source TEXT NOT NULL,
-            title TEXT,
-            link TEXT,
-            summary TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """))
-    session.execute(text("CREATE INDEX IF NOT EXISTS idx_news_ts ON news (ts)"))
-    session.commit()
+    """Create news table if not exists (SQLite and PostgreSQL compatible)."""
+    from sqlalchemy import inspect
+    insp = inspect(session.bind)
+    if "news" not in insp.get_table_names():
+        dialect = session.bind.dialect.name
+        if dialect == "sqlite":
+            session.execute(text("""
+                CREATE TABLE IF NOT EXISTS news (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    title TEXT,
+                    link TEXT,
+                    summary TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+        else:
+            session.execute(text("""
+                CREATE TABLE IF NOT EXISTS news (
+                    id SERIAL PRIMARY KEY,
+                    ts TIMESTAMP NOT NULL,
+                    source TEXT NOT NULL,
+                    title TEXT,
+                    link TEXT,
+                    summary TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+        session.execute(text("CREATE INDEX IF NOT EXISTS idx_news_ts ON news (ts)"))
+        session.commit()
 
 
 def insert_news(session, source: str, title: str, link: str, summary: str, ts: datetime) -> None:
@@ -63,18 +80,19 @@ async def main():
                 continue
             items = fetch_rss(url)
             filtered = filter_by_keywords(items, KEYWORDS)
-            for it in filtered[:20]:
+            batch = filtered[:20]
+            for it in batch:
                 ts = it.get("published") or datetime.now(timezone.utc)
                 insert_news(
                     session,
                     source=url[:50],
                     title=it.get("title", "")[:500],
                     link=it.get("link", "")[:500],
-                    summary=it.get("summary", "")[:1000],
+                    summary=it.get("summary", "")[:500],
                     ts=ts,
                 )
             session.commit()
-            logger.info("RSS %s: %d items stored", url[:40], len(filtered))
+            logger.info("RSS %s: %d items stored", url[:40], len(batch))
     except Exception as e:
         session.rollback()
         logger.exception("%s", e)

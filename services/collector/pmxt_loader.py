@@ -37,17 +37,37 @@ def load_pmxt_parquet(
         return None
 
 
+def _parse_ts(raw_ts):
+    """Parse timestamp from various PMXT formats into timezone-aware datetime."""
+    if hasattr(raw_ts, "to_pydatetime"):
+        dt = raw_ts.to_pydatetime()
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    if isinstance(raw_ts, (int, float)):
+        if raw_ts > 1e12:
+            raw_ts = raw_ts / 1000
+        return datetime.fromtimestamp(raw_ts, tz=timezone.utc)
+    return raw_ts
+
+
+def _get_ts_field(row):
+    """Get timestamp field from row, checking multiple possible column names."""
+    for key in ("timestamp", "ts", "t"):
+        val = row.get(key)
+        if val is not None:
+            return val
+    return None
+
+
 def trades_to_rows(df: pd.DataFrame, market_id_col: str = "market") -> list[dict]:
     """Convert PMXT trades DataFrame to list of dicts for DB insert."""
     if df is None or df.empty:
         return []
     rows = []
     for _, row in df.iterrows():
-        ts = row.get("timestamp") or row.get("ts") or row.get("t")
-        if hasattr(ts, "to_pydatetime"):
-            ts = ts.to_pydatetime()
-        elif isinstance(ts, (int, float)):
-            ts = datetime.fromtimestamp(ts, tz=timezone.utc)
+        raw_ts = _get_ts_field(row)
+        ts = _parse_ts(raw_ts)
         market_id = str(row.get(market_id_col, row.get("market_id", "")))
         price = float(row.get("price", 0))
         size = float(row.get("size", row.get("volume", 0)))
@@ -64,11 +84,8 @@ def orderbook_to_rows(
         return []
     rows = []
     for _, row in df.iterrows():
-        ts = row.get("timestamp") or row.get("ts") or row.get("t")
-        if hasattr(ts, "to_pydatetime"):
-            ts = ts.to_pydatetime()
-        elif isinstance(ts, (int, float)):
-            ts = datetime.fromtimestamp(ts, tz=timezone.utc)
+        raw_ts = _get_ts_field(row)
+        ts = _parse_ts(raw_ts)
         market_id = str(row.get(market_id_col, row.get("market_id", "")))
         bid_price = float(row.get("bid_price", row.get("best_bid", 0)))
         bid_qty = float(row.get("bid_qty", row.get("bid_size", 0)))
