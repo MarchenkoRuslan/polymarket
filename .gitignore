@@ -40,5 +40,6 @@ Thumbs.db
 logs/
 
 # Local SQLite DB
-polymarket.db
-test_start2.db-journal
+*.db
+*.db-journal
+*.db-wal

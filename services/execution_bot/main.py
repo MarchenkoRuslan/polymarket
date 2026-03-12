@@ -161,7 +161,7 @@ def run():
 def main():
     logger.info("Execution Bot starting")
     if HAS_PROM:
-        port = _parse_int("PROMETHEUS_PORT", "8000")
+        port = _parse_int("PROMETHEUS_PORT", "9100")
         try:
             start_http_server(port)
             logger.info("Prometheus metrics on :%d", port)

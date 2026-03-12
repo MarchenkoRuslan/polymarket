@@ -16,7 +16,10 @@ target_metadata = None
 
 
 def get_url():
-    return os.getenv("DATABASE_URL", "postgresql://polymarket:polymarket@localhost:5432/polymarket")
+    url = os.getenv("DATABASE_URL", "postgresql://polymarket:polymarket@localhost:5432/polymarket")
+    if url and url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
 
 
 def run_migrations_offline() -> None:
