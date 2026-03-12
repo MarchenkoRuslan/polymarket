@@ -8,7 +8,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from sqlalchemy import text
 from db import SessionLocal
-from services.execution_bot.risk import RiskConfig, position_size
+from services.execution_bot.risk import (
+    RiskConfig,
+    position_size,
+    should_stop_loss,
+    should_take_profit,
+)
 from services.execution_bot.orders import place_order
 
 try:
@@ -19,6 +24,10 @@ except ImportError:
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+EDGE_DISCOUNT = float(os.getenv("EDGE_DISCOUNT_PCT", "0.05"))
+BUY_THRESHOLD = 0.5
+SELL_THRESHOLD = 0.3
 
 
 def _parse_int(name: str, default: str) -> int:
@@ -34,6 +43,67 @@ if HAS_PROM:
     capital_gauge = Gauge("polymarket_capital", "Current capital")
 
 
+def _limit_price(prediction: float, side: str) -> float:
+    """Apply edge discount so we don't buy at fair value.
+
+    Buy below predicted fair value, sell above.
+    """
+    if side == "buy":
+        return round(prediction * (1 - EDGE_DISCOUNT), 4)
+    return round(prediction * (1 + EDGE_DISCOUNT), 4)
+
+
+def check_open_positions(session, config: RiskConfig, dry_run: bool) -> None:
+    """Check open positions for stop-loss / take-profit triggers."""
+    result = session.execute(
+        text("""
+            SELECT o.order_id, o.market_id, o.price AS entry_price, o.size, o.side
+            FROM orders o
+            WHERE o.status = 'filled'
+        """)
+    )
+    positions = result.fetchall()
+    if not positions:
+        return
+
+    for order_id, market_id, entry_price, size, side in positions:
+        current = session.execute(
+            text("SELECT price FROM trades WHERE market_id = :m ORDER BY ts DESC LIMIT 1"),
+            {"m": market_id},
+        ).fetchone()
+        if not current:
+            continue
+        current_price = float(current[0])
+        entry_price = float(entry_price)
+
+        if should_stop_loss(entry_price, current_price, config):
+            logger.warning(
+                "STOP-LOSS triggered: order=%s market=%s entry=%.4f current=%.4f",
+                order_id, market_id[:16], entry_price, current_price,
+            )
+            close_side = "sell" if side == "buy" else "buy"
+            place_order(
+                token_id=market_id,
+                side=close_side,
+                price=_limit_price(current_price, close_side),
+                size=float(size),
+                dry_run=dry_run,
+            )
+        elif should_take_profit(entry_price, current_price, config):
+            logger.info(
+                "TAKE-PROFIT triggered: order=%s market=%s entry=%.4f current=%.4f",
+                order_id, market_id[:16], entry_price, current_price,
+            )
+            close_side = "sell" if side == "buy" else "buy"
+            place_order(
+                token_id=market_id,
+                side=close_side,
+                price=_limit_price(current_price, close_side),
+                size=float(size),
+                dry_run=dry_run,
+            )
+
+
 def run():
     """Check signals, apply risk rules, place orders (dry_run by default)."""
     session = SessionLocal()
@@ -42,6 +112,8 @@ def run():
     dry_run = os.getenv("POLYMARKET_DRY_RUN", "true").lower() == "true"
 
     try:
+        check_open_positions(session, config, dry_run)
+
         result = session.execute(
             text("SELECT ts, market_id, prediction FROM signals ORDER BY ts DESC LIMIT 20")
         )
@@ -53,14 +125,24 @@ def run():
                     orders_rejected.inc()
                 logger.info("Max positions reached, skipping")
                 break
+
+            pred = float(pred)
+            if pred < SELL_THRESHOLD:
+                side = "sell"
+            elif pred >= BUY_THRESHOLD:
+                side = "buy"
+            else:
+                continue
+
             size = position_size(capital, pred, win_loss_ratio=2.0, config=config)
             if size <= 0:
                 continue
-            # Note: market_id may differ from token_id; real orders need token from Gamma API
+
+            limit_px = _limit_price(pred, side)
             order = place_order(
                 token_id=market_id,
-                side="buy",
-                price=pred,
+                side=side,
+                price=limit_px,
                 size=size,
                 dry_run=dry_run,
             )

@@ -3,7 +3,7 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -64,7 +64,7 @@ async def main():
             items = fetch_rss(url)
             filtered = filter_by_keywords(items, KEYWORDS)
             for it in filtered[:20]:
-                ts = it.get("published") or datetime.utcnow()
+                ts = it.get("published") or datetime.now(timezone.utc)
                 insert_news(
                     session,
                     source=url[:50],
