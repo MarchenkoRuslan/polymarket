@@ -30,7 +30,7 @@ async def collect_from_api():
     client = PolymarketClient(POLYMARKET_GAMMA_API, POLYMARKET_CLOB_API, rate_limit_delay=rate_delay)
     session = SessionLocal()
     try:
-        events = await client.get_events(active=True, closed=False, limit=20)
+        events = await client.get_events(active=True, closed=False, limit=50)
         markets = markets_from_events(events)
         for m in markets:
             market_id = m.get("id") or m.get("conditionId") or m.get("condition_id")
@@ -44,26 +44,52 @@ async def collect_from_api():
         session.commit()
         logger.info("Upserted %d markets from API", len(markets))
 
-        for m in markets[:3]:
-            mid = m.get("id") or m.get("conditionId")
+        now = datetime.now(timezone.utc)
+        loaded = 0
+        for m in markets[:30]:
+            mid = m.get("id") or m.get("conditionId") or m.get("condition_id")
             if isinstance(mid, list):
                 mid = mid[0] if mid else ""
             if not mid:
                 continue
             mid = str(mid)
-            trades = await client.get_trades(mid, limit=10)
-            for t in trades:
-                ts = t.get("timestamp") or t.get("ts") or t.get("matchTime")
-                if isinstance(ts, (int, float)):
-                    ts = datetime.fromtimestamp(
-                        ts / 1000 if ts > 1e12 else ts, tz=timezone.utc
-                    )
-                price = float(t.get("price", 0))
-                size = float(t.get("size", t.get("amount", 0)))
-                side = str(t.get("side", "BUY")).lower()[:4]
-                insert_trade(session, mid, ts, price, size, side)
-                await asyncio.sleep(0.05)
+            asset_id = m.get("clobTokenIds") or []
+            if isinstance(asset_id, list) and asset_id:
+                asset_id = str(asset_id[0])
+            else:
+                asset_id = mid
+            history = []
+            try:
+                history = await client.get_prices_history(asset_id, interval="max")
+            except Exception:
+                pass
+            for pt in history:
+                ts_raw = pt.get("t") or pt.get("timestamp") or pt.get("ts")
+                if ts_raw is None:
+                    continue
+                ts = datetime.fromtimestamp(
+                    ts_raw / 1000 if ts_raw > 1e12 else ts_raw, tz=timezone.utc
+                )
+                price = float(pt.get("p", pt.get("price", 0)))
+                if price <= 0 or price >= 1:
+                    continue
+                insert_trade(session, mid, ts, price, 1.0, "buy")
+                loaded += 1
+            if not history:
+                price_val = m.get("lastTradePrice") or (m.get("outcomePrices") or "0.5")
+                if isinstance(price_val, str):
+                    try:
+                        price_val = float(price_val.split(",")[0].strip())
+                    except (ValueError, IndexError):
+                        price_val = 0.5
+                price_val = float(price_val)
+                if 0 < price_val < 1:
+                    insert_trade(session, mid, now, price_val, 1.0, "buy")
+                    loaded += 1
+            await asyncio.sleep(0.1)
+        if loaded:
             session.commit()
+            logger.info("Loaded %d price points from API", loaded)
     except Exception as e:
         session.rollback()
         logger.exception("Collect error: %s", e)

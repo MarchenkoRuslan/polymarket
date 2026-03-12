@@ -91,14 +91,17 @@ class PolymarketClient:
     async def get_prices_history(
         self, market_id: str, interval: str = "max"
     ) -> list[dict[str, Any]]:
-        """Fetch price history for a market. interval: 1m, 1h, max."""
+        """Fetch price history for a market. interval: 1m, 1h, 6h, 1d, 1w, max. Returns [{t, p}]."""
         resp = await self._request(
             "GET",
             f"{self.clob_url}/prices-history",
             params={"market": market_id, "interval": interval},
         )
         resp.raise_for_status()
-        return _extract_list(resp.json())
+        data = resp.json()
+        if isinstance(data, dict) and "history" in data:
+            return data["history"] if isinstance(data["history"], list) else []
+        return _extract_list(data)
 
     async def get_orderbook(self, token_id: str) -> dict | None:
         """Fetch orderbook for a token. CLOB uses token_id."""

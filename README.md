@@ -63,15 +63,31 @@ python -m services.collector.main
 
 ## Загрузка данных
 
-### PMXT (исторические данные)
+### Реальные данные (Polymarket API)
+
+Коллектор загружает:
+- **Рынки** — из Gamma API (активные события)
+- **Цены** — из CLOB `prices-history` (если доступно) или текущие `lastTradePrice` из Gamma
+
+```powershell
+.\run.ps1 collect
+```
+
+Запускайте `collect` регулярно (например, раз в час по cron/Task Scheduler), чтобы накопить историю для ML.
+
+### Демо-данные (без API)
+
+```powershell
+.\run.ps1 seed   # 2 рынка, 350 сделок
+```
+
+### PMXT (исторические Parquet)
 
 ```bash
 python scripts/load_pmxt.py --start 2025-01-01 --days 7
 ```
 
-### Polymarket API
-
-Коллектор автоматически загружает markets и trades при запуске `services.collector.main`.
+Архив archive.pmxt.dev может быть временно недоступен.
 
 ## Конфигурация
 
