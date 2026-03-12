@@ -2,11 +2,13 @@
 import asyncio
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from config import (
+    API_RATE_LIMIT,
     POLYMARKET_CLOB_API,
     POLYMARKET_GAMMA_API,
 )
@@ -24,7 +26,8 @@ logger = logging.getLogger(__name__)
 
 async def collect_from_api():
     """Collect markets and sample data from Polymarket API."""
-    client = PolymarketClient(POLYMARKET_GAMMA_API, POLYMARKET_CLOB_API)
+    rate_delay = 60.0 / max(API_RATE_LIMIT, 10) if API_RATE_LIMIT else 0.1
+    client = PolymarketClient(POLYMARKET_GAMMA_API, POLYMARKET_CLOB_API, rate_limit_delay=rate_delay)
     session = SessionLocal()
     try:
         events = await client.get_events(active=True, closed=False, limit=20)
@@ -52,8 +55,9 @@ async def collect_from_api():
             for t in trades:
                 ts = t.get("timestamp") or t.get("ts") or t.get("matchTime")
                 if isinstance(ts, (int, float)):
-                    from datetime import datetime
-                    ts = datetime.utcfromtimestamp(ts / 1000 if ts > 1e12 else ts)
+                    ts = datetime.fromtimestamp(
+                        ts / 1000 if ts > 1e12 else ts, tz=timezone.utc
+                    )
                 price = float(t.get("price", 0))
                 size = float(t.get("size", t.get("amount", 0)))
                 side = str(t.get("side", "BUY")).lower()[:4]

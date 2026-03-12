@@ -19,8 +19,16 @@ POLYMARKET_GAMMA_API = os.getenv("POLYMARKET_GAMMA_API", "https://gamma-api.poly
 # PMXT archive
 PMXT_ARCHIVE_URL = os.getenv("PMXT_ARCHIVE_URL", "https://archive.pmxt.dev")
 
+def _parse_int(name: str, default: str) -> int:
+    val = os.getenv(name, default)
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return int(default)
+
+
 # Fee (basis points, 30 = 0.3%)
-DEFAULT_FEE_BPS = int(os.getenv("DEFAULT_FEE_BPS", "30"))
+DEFAULT_FEE_BPS = _parse_int("DEFAULT_FEE_BPS", "30")
 
 # Rate limits (requests per minute)
-API_RATE_LIMIT = int(os.getenv("API_RATE_LIMIT", "100"))
+API_RATE_LIMIT = _parse_int("API_RATE_LIMIT", "100")

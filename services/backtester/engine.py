@@ -10,6 +10,8 @@ class BacktestConfig:
     initial_capital: float = 10000.0
     fee_bps: int = 30
     slippage_bps: int = 10
+    # Sharpe annualization: sqrt(252) for daily, sqrt(252*24*60) for minute
+    sharpe_annualization: float = 252**0.5
 
 
 @dataclass
@@ -68,7 +70,11 @@ def run_backtest(
     eq_series = pd.Series(equity[1:], index=timestamps[1:])
     total_return = (eq_series.iloc[-1] - config.initial_capital) / config.initial_capital if len(eq_series) > 0 else 0
     returns = eq_series.pct_change().dropna()
-    sharpe = returns.mean() / returns.std() * (252**0.5) if len(returns) > 0 and returns.std() > 0 else 0.0
+    sharpe = (
+        returns.mean() / returns.std() * config.sharpe_annualization
+        if len(returns) > 0 and returns.std() > 0
+        else 0.0
+    )
     cummax = eq_series.cummax()
     drawdown = (eq_series - cummax) / cummax
     max_dd = drawdown.min() if len(drawdown) > 0 else 0.0

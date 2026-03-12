@@ -20,8 +20,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def load_signals(session, market_id: str, limit: int = 5000) -> pd.Series:
-    """Load model signals (predictions) for market."""
+def load_signals_df(session, market_id: str, limit: int = 5000) -> pd.DataFrame:
+    """Load model signals (predictions) for market as DataFrame with ts index."""
     result = session.execute(
         text("""
             SELECT ts, prediction FROM signals
@@ -31,9 +31,13 @@ def load_signals(session, market_id: str, limit: int = 5000) -> pd.Series:
     )
     rows = result.fetchall()
     if not rows:
-        return pd.Series()
+        return pd.DataFrame()
     df = pd.DataFrame(rows, columns=["ts", "prediction"])
-    return (df["prediction"] >= 0.5).astype(int).replace(0, -1)  # 1=buy, -1=hold/sell
+    # 1=buy, 0=hold, -1=sell (pred>=0.5 buy, pred<0.3 sell, else hold)
+    buy = (df["prediction"] >= 0.5).astype(int)
+    sell = (df["prediction"] < 0.3).astype(int)
+    df["signal"] = buy - sell
+    return df[["ts", "signal"]].tail(limit)
 
 
 def load_market_data(session, market_id: str, limit: int = 5000) -> pd.DataFrame:
@@ -64,12 +68,18 @@ def main():
             df = load_market_data(session, mid)
             if df.empty or len(df) < 10:
                 continue
-            sig_series = load_signals(session, mid, len(df))
-            if sig_series.empty or len(sig_series) != len(df):
+            sig_df = load_signals_df(session, mid, len(df))
+            if sig_df.empty:
                 signals = baseline_always_buy(df)
                 label = "baseline"
             else:
-                signals = sig_series.reindex(df.index, fill_value=0)
+                merged = pd.merge_asof(
+                    df.sort_values("ts"),
+                    sig_df.sort_values("ts"),
+                    on="ts",
+                    direction="backward",
+                )
+                signals = merged["signal"].fillna(0).astype(int)
                 label = "ML"
             bt = run_backtest(df, signals, config)
             logger.info(

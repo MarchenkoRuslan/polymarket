@@ -1,6 +1,7 @@
 """RSS feed loader for news signals."""
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from time import mktime
 
 import httpx
 
@@ -27,11 +28,9 @@ def fetch_rss(url: str) -> list[dict]:
         for entry in feed.entries[:50]:
             published = None
             if hasattr(entry, "published_parsed") and entry.published_parsed:
-                from time import mktime
-                published = datetime.utcfromtimestamp(mktime(entry.published_parsed))
+                published = datetime.fromtimestamp(mktime(entry.published_parsed), tz=timezone.utc)
             elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-                from time import mktime
-                published = datetime.utcfromtimestamp(mktime(entry.updated_parsed))
+                published = datetime.fromtimestamp(mktime(entry.updated_parsed), tz=timezone.utc)
             items.append({
                 "title": getattr(entry, "title", ""),
                 "link": getattr(entry, "link", ""),
