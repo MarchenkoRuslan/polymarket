@@ -33,7 +33,7 @@ def load_signals_df(session, market_id: str, limit: int = 5000) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame()
     df = pd.DataFrame(rows, columns=["ts", "prediction"])
-    # 1=buy, 0=hold, -1=sell (pred>=0.5 buy, pred<0.3 sell, else hold)
+    df["prediction"] = df["prediction"].astype(float)
     buy = (df["prediction"] >= 0.5).astype(int)
     sell = (df["prediction"] < 0.3).astype(int)
     df["signal"] = buy - sell
@@ -53,6 +53,8 @@ def load_market_data(session, market_id: str, limit: int = 5000) -> pd.DataFrame
     if not rows:
         return pd.DataFrame()
     df = pd.DataFrame(rows, columns=["ts", "price", "size"])
+    df["price"] = df["price"].astype(float)
+    df["size"] = df["size"].astype(float)
     return df.tail(limit)
 
 

@@ -25,6 +25,8 @@ def load_trades_by_market(session, market_id: str, limit: int = 10000) -> pd.Dat
     if not rows:
         return pd.DataFrame()
     df = pd.DataFrame(rows, columns=["ts", "price", "size", "side"])
+    df["price"] = df["price"].astype(float)
+    df["size"] = df["size"].astype(float)
     return df.tail(limit)
 
 

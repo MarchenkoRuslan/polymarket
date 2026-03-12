@@ -34,6 +34,7 @@ def load_features_wide(session, market_id: str, limit: int = 5000) -> pd.DataFra
     if not rows:
         return pd.DataFrame()
     df = pd.DataFrame(rows, columns=["ts", "feature_name", "feature_value"])
+    df["feature_value"] = df["feature_value"].astype(float)
     pivot = df.pivot_table(index="ts", columns="feature_name", values="feature_value")
     return pivot.tail(limit)
 
@@ -48,6 +49,8 @@ def load_trades_with_target(session, market_id: str, limit: int = 5000) -> pd.Da
     if not rows:
         return pd.DataFrame()
     df = pd.DataFrame(rows, columns=["ts", "price", "size"])
+    df["price"] = df["price"].astype(float)
+    df["size"] = df["size"].astype(float)
     df = compute_all(df)
     df["target"] = (df["price"].shift(-1) > df["price"]).astype(int)
     df = df.dropna(subset=["target"])
