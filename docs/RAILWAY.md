@@ -17,6 +17,7 @@
 | `POLYMARKET_GAMMA_API` | `https://gamma-api.polymarket.com` |
 | `API_RATE_LIMIT` | `60` |
 | `COLLECT_INTERVAL_SEC` | `900` (15 мин), опционально |
+| `COLLECT_DEFER_SEC` | `5` — задержка перед первым сбором (сек), чтобы HTTP успел подняться |
 
 ## 3. Инициализация БД
 
@@ -39,7 +40,37 @@ uvicorn api.app:app --host 0.0.0.0 --port $PORT
 
 Альтернатива (без Swagger): `python server.py`
 
-## 5. Cron Job (опционально)
+## 5. Устранение неполадок
+
+### 502 Bad Gateway
+
+Проверьте:
+
+- **Start Command** — ровно `uvicorn api.app:app --host 0.0.0.0 --port $PORT` (без лишних команд).
+- **Порт** — `$PORT` подставляется Railway; без `--host 0.0.0.0` прокси не достучится.
+- **Логи** — после строк Alembic ищите traceback или перезапуски контейнера.
+
+Переменная `COLLECT_DEFER_SEC=5` (по умолчанию) откладывает первый сбор на 5 секунд, чтобы HTTP успел подняться до тяжёлых запросов к Polymarket API.
+
+### Логи Alembic как «error»
+
+Сообщения вида `INFO [alembic.runtime.migration] Context impl PostgresqlImpl` Alembic пишет в **stderr**. На Railway stderr часто помечается как `severity: error`, хотя это обычный INFO. Это **не сбой миграций**. Если таблицы созданы — всё в порядке.
+
+### Пустые таблицы
+
+Таблицы заполняются разными сервисами:
+
+| Таблица | Источник |
+|---------|----------|
+| `markets`, `trades` | Collector (web-сервис или cron) |
+| `orderbook` | Collector (при наличии данных) |
+| `features`, `signals` | `python scripts/run_pipeline.py` (feature_store + ml_module) |
+| `news` | `python -m services.news_collector.main` |
+| `orders`, `results` | Execution bot, backtester |
+
+При одном только web-сервисе пустые `features`, `signals`, `news` — норма. Проверьте `/api/v1/status`: `markets`, `trades`, `last_collect_error`.
+
+## 6. Cron Job (опционально)
 
 Автосбор уже встроен в web-сервис. Отдельный Cron нужен только если хотите полностью отключить фоновый сбор и управлять им через расписание.
 
@@ -67,7 +98,7 @@ uvicorn api.app:app --host 0.0.0.0 --port $PORT
 
 За 1–2 дня при `*/15` накопится 100–200 точек на рынок — достаточно для качественных предиктов.
 
-## 6. Дополнительные Cron (опционально)
+## 7. Дополнительные Cron (опционально)
 
 Можно добавить отдельные сервисы для:
 

@@ -44,6 +44,8 @@ def run_collect():
 def collector_loop():
     """Background loop: collect on startup, then every 15 min."""
     interval = int(os.environ.get("COLLECT_INTERVAL_SEC", "900"))  # 15 min
+    defer = int(os.environ.get("COLLECT_DEFER_SEC", "5"))
+    time.sleep(defer)  # let HTTP server start before heavy API calls
     run_collect()
     while True:
         time.sleep(interval)

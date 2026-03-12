@@ -18,6 +18,7 @@ async def lifespan(app: FastAPI):
 
     t = threading.Thread(target=collector_loop, daemon=True)
     t.start()
+    logger.info("App ready, listening for requests")
     yield
 
 
