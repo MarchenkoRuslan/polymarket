@@ -89,6 +89,18 @@ def upgrade() -> None:
         )
     """)
     op.execute("""
+        CREATE TABLE IF NOT EXISTS news (
+            id SERIAL PRIMARY KEY,
+            ts TIMESTAMP NOT NULL,
+            source TEXT NOT NULL,
+            title TEXT,
+            link TEXT,
+            summary TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS idx_news_ts ON news (ts)")
+    op.execute("""
         CREATE TABLE IF NOT EXISTS results (
             id SERIAL PRIMARY KEY,
             ts TIMESTAMP NOT NULL,
@@ -102,6 +114,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS results")
+    op.execute("DROP TABLE IF EXISTS news")
     op.execute("DROP TABLE IF EXISTS signals")
     op.execute("DROP TABLE IF EXISTS orders")
     op.execute("DROP TABLE IF EXISTS features")

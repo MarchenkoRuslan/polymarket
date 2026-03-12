@@ -41,3 +41,4 @@ logs/
 
 # Local SQLite DB
 polymarket.db
+test_start2.db-journal

@@ -59,7 +59,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://polymarket:polymarket@localhost:5432/polymarket_test
         run: |
-          python -m pytest tests/ -v --tb=short 2>/dev/null || echo "No tests yet"
+          python -m pytest tests/ -v --tb=short
 
   build:
     runs-on: ubuntu-latest
