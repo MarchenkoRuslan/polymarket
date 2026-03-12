@@ -42,9 +42,14 @@ def save_features(session, rows: list[dict]) -> None:
 
 def run(session):
     """Compute features for all markets with trades."""
-    result = session.execute(text("SELECT DISTINCT market_id FROM trades LIMIT 50"))
+    result = session.execute(
+        text("SELECT DISTINCT market_id FROM trades WHERE market_id NOT LIKE '0x_demo%'"),
+    )
     markets = [r[0] for r in result.fetchall()]
-    for mid in markets:
+    if not markets:
+        result = session.execute(text("SELECT DISTINCT market_id FROM trades"))
+        markets = [r[0] for r in result.fetchall()]
+    for mid in markets[:50]:
         df = load_trades_by_market(session, mid)
         if df.empty or len(df) < 5:
             continue

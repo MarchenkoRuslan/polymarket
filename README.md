@@ -18,14 +18,14 @@ pip install -r requirements.txt
 copy .env.example .env
 .\run.ps1 init
 .\run.ps1 collect
-.\run.ps1 news
+.\run.ps1 warmup   # ~5 min: накопление истории (15× collect)
 .\run.ps1 features
 .\run.ps1 ml
 .\run.ps1 backtest
 .\run.ps1 bot
 ```
 
-В `.env` по умолчанию `DATABASE_URL=sqlite:///polymarket.db` — локальный файл БД.
+Демо-данные: `.\run.ps1 seed` вместо warmup. В `.env` — `DATABASE_URL=sqlite:///polymarket.db`.
 
 ### Локальный запуск (Docker Compose)
 

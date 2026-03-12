@@ -60,8 +60,14 @@ def main():
     logger.info("Backtester starting")
     session = SessionLocal()
     try:
-        result = session.execute(text("SELECT DISTINCT market_id FROM trades LIMIT 10"))
+        result = session.execute(
+            text("SELECT DISTINCT market_id FROM trades WHERE market_id NOT LIKE '0x_demo%'")
+        )
         markets = [r[0] for r in result.fetchall()]
+        if not markets:
+            result = session.execute(text("SELECT DISTINCT market_id FROM trades"))
+            markets = [r[0] for r in result.fetchall()]
+        markets = markets[:15]
         config = BacktestConfig(fee_bps=DEFAULT_FEE_BPS)
 
         for mid in markets:
