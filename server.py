@@ -87,6 +87,7 @@ def run_pipeline():
     except Exception as e:
         _last_pipeline_error = str(e)
         logger.warning("Pipeline: features failed, skipping ML")
+        return
     try:
         run_ml()
     except Exception as e:
@@ -155,10 +156,10 @@ def main():
     from api.app import app
 
     @asynccontextmanager
-    async def _noop_lifespan(app):
+    async def _noop_lifespan(_app):
         yield
 
-    app.router.lifespan_context = _noop_lifespan
+    app.router.lifespan_context = _noop_lifespan  # type: ignore[assignment]
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
 

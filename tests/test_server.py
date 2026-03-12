@@ -43,6 +43,19 @@ def test_run_pipeline_catches_errors():
         run_pipeline()
 
 
+def test_run_pipeline_skips_ml_when_features_fail():
+    """run_pipeline skips ML when feature computation fails."""
+    with (
+        patch("server.run_collect") as mock_c,
+        patch("server.run_features", side_effect=RuntimeError("features broke")) as mock_f,
+        patch("server.run_ml") as mock_m,
+    ):
+        run_pipeline()
+        mock_c.assert_called_once()
+        mock_f.assert_called_once()
+        mock_m.assert_not_called()
+
+
 def test_get_status_returns_dict():
     """_get_status returns dict with expected keys even if DB is unavailable."""
     status = _get_status()
