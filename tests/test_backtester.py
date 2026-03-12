@@ -67,3 +67,26 @@ def test_stress_high_volatility():
     res_low = run_backtest(df_low, signals)
     res_high = run_backtest(df_high, baseline_always_buy(df_high))
     assert res_high.max_drawdown <= res_low.max_drawdown + 0.5
+
+
+def test_three_state_signals():
+    """3-state signals: buy opens, hold keeps, sell closes."""
+    n = 60
+    df = pd.DataFrame({
+        "ts": range(n),
+        "price": [0.5 + 0.002 * i for i in range(n)],
+    })
+    signals = pd.Series([1] + [0] * 28 + [-1] + [0] * 30)
+    result = run_backtest(df, signals, BacktestConfig(initial_capital=10000))
+    assert result.num_trades == 2
+    assert result.total_return > 0
+
+
+def test_sharpe_annualization_config():
+    """Custom sharpe_annualization changes Sharpe ratio."""
+    df = _make_price_series(200, trend=0.002)
+    signals = baseline_always_buy(df)
+    daily = run_backtest(df, signals, BacktestConfig(sharpe_annualization=252**0.5))
+    minute = run_backtest(df, signals, BacktestConfig(sharpe_annualization=(252 * 24 * 60) ** 0.5))
+    if daily.sharpe_ratio != 0:
+        assert abs(minute.sharpe_ratio) > abs(daily.sharpe_ratio)

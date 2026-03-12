@@ -114,9 +114,11 @@ def place_order_stub(market_id: str, side: str, price: float, size: float) -> di
     return place_order(token_id=market_id, side=side, price=price, size=size, dry_run=True)
 
 
-def cancel_order(order_id: str, dry_run: bool = True) -> bool:
-    """Cancel order. dry_run: simulate only."""
-    if dry_run or os.getenv("POLYMARKET_DRY_RUN", "true").lower() == "true":
+def cancel_order(order_id: str, dry_run: bool | None = None) -> bool:
+    """Cancel order. dry_run: None = use env, True/False override."""
+    env_dry = os.getenv("POLYMARKET_DRY_RUN", "true").lower() == "true"
+    effective_dry_run = env_dry if dry_run is None else dry_run
+    if effective_dry_run:
         logger.info("DRY RUN: would cancel order %s", order_id)
         return True
     client = _get_client()

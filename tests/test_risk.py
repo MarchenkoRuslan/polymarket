@@ -6,6 +6,7 @@ from services.execution_bot.risk import (
     should_stop_loss,
     should_take_profit,
 )
+from services.execution_bot.main import _limit_price, _parse_int
 
 
 def test_kelly_fraction():
@@ -37,3 +38,39 @@ def test_take_profit():
     cfg = RiskConfig(take_profit_pct=1.0)
     assert should_take_profit(1.0, 2.0, cfg) is True
     assert should_take_profit(1.0, 1.5, cfg) is False
+
+
+def test_stop_loss_zero_entry():
+    """Stop-loss with zero entry price never triggers."""
+    cfg = RiskConfig(stop_loss_pct=0.2)
+    assert should_stop_loss(0, 0.5, cfg) is False
+
+
+def test_limit_price_buy_applies_discount():
+    """Buy limit price is below prediction (edge discount)."""
+    price = _limit_price(0.7, "buy")
+    assert price < 0.7
+
+
+def test_limit_price_sell_applies_premium():
+    """Sell limit price is above prediction."""
+    price = _limit_price(0.3, "sell")
+    assert price > 0.3
+
+
+def test_parse_int_valid(monkeypatch):
+    """_parse_int reads valid env."""
+    monkeypatch.setenv("TEST_PORT", "9090")
+    assert _parse_int("TEST_PORT", "8000") == 9090
+
+
+def test_parse_int_invalid_falls_back(monkeypatch):
+    """_parse_int with invalid env returns default."""
+    monkeypatch.setenv("TEST_PORT", "not_a_number")
+    assert _parse_int("TEST_PORT", "8000") == 8000
+
+
+def test_parse_int_missing_uses_default(monkeypatch):
+    """_parse_int with missing env returns default."""
+    monkeypatch.delenv("TEST_PORT_MISSING", raising=False)
+    assert _parse_int("TEST_PORT_MISSING", "42") == 42
