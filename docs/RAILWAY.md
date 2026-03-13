@@ -13,17 +13,28 @@
 | Переменная | Значение |
 |------------|----------|
 | `DATABASE_URL` | Автоматически от PostgreSQL |
+| `DATABASE_SSLMODE` | `require` (по умолчанию). Railway PostgreSQL использует SSL |
 | `POLYMARKET_CLOB_API` | `https://clob.polymarket.com` |
 | `POLYMARKET_GAMMA_API` | `https://gamma-api.polymarket.com` |
 | `API_RATE_LIMIT` | `60` |
 | `COLLECT_INTERVAL_SEC` | `900` (15 мин), опционально |
 | `COLLECT_DEFER_SEC` | `5` — задержка перед первым сбором (сек), чтобы HTTP успел подняться |
 
-## 3. Инициализация БД
+## 3. SSL-подключение к PostgreSQL
+
+Railway PostgreSQL автоматически генерирует SSL-сертификаты при инициализации. Приложение подключается с `sslmode=require` по умолчанию.
+
+- **`DATABASE_SSLMODE=require`** — SSL обязателен, сертификат сервера не проверяется (достаточно для Railway)
+- **`DATABASE_SSLMODE=disable`** — для локальной разработки без SSL
+- Если `DATABASE_URL` уже содержит `?sslmode=...`, значение из URL имеет приоритет
+
+Для локальной разработки с SQLite SSL игнорируется автоматически.
+
+## 4. Инициализация БД
 
 Миграции применяются **автоматически** при старте сервера. Таблицы создадутся при первом запуске, если `DATABASE_URL` настроен.
 
-## 4. Web-сервис + полный pipeline
+## 5. Web-сервис + полный pipeline
 
 **Start Command** (в Settings → Deploy):
 ```bash
@@ -40,7 +51,7 @@ uvicorn api.app:app --host 0.0.0.0 --port $PORT
 
 Альтернатива: `python server.py` (тот же uvicorn + pipeline)
 
-## 5. Устранение неполадок
+## 6. Устранение неполадок
 
 ### 502 Bad Gateway
 
@@ -69,7 +80,7 @@ Web-сервис запускает **полный pipeline** (collector → fea
 
 Проверьте `/api/v1/status`: counts, `last_collect_error`, `last_features_error`, `last_ml_error`, `last_pipeline_error`.
 
-## 6. Cron Job (опционально)
+## 7. Cron Job (опционально)
 
 Автосбор уже встроен в web-сервис. Отдельный Cron нужен только если хотите полностью отключить фоновый сбор и управлять им через расписание.
 
@@ -97,7 +108,7 @@ Web-сервис запускает **полный pipeline** (collector → fea
 
 За 1–2 дня при `*/15` накопится 100–200 точек на рынок — достаточно для качественных предиктов.
 
-## 7. Дополнительные Cron (опционально)
+## 8. Дополнительные Cron (опционально)
 
 Pipeline уже встроен в web-сервис. Отдельные Cron нужны только для:
 

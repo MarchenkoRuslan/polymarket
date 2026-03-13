@@ -1,6 +1,7 @@
 """Application settings loaded from environment."""
 import os
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from dotenv import load_dotenv
 
@@ -12,7 +13,29 @@ _raw_db_url = os.getenv(
     "DATABASE_URL",
     "postgresql://polymarket:polymarket@localhost:5432/polymarket"
 )
-DATABASE_URL = _raw_db_url.replace("postgres://", "postgresql://", 1) if _raw_db_url else _raw_db_url
+_db_url = _raw_db_url.replace("postgres://", "postgresql://", 1) if _raw_db_url else _raw_db_url
+
+# SSL mode for PostgreSQL connections (require, verify-ca, verify-full, prefer, disable)
+# Default: "require" for PostgreSQL on Railway / production; ignored for SQLite
+DATABASE_SSLMODE = os.getenv("DATABASE_SSLMODE", "require")
+
+
+def _apply_sslmode(url: str, sslmode: str) -> str:
+    """Append sslmode to a PostgreSQL URL if not already present."""
+    if not url or not url.startswith("postgresql"):
+        return url
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    if "sslmode" in qs:
+        return url
+    if sslmode and sslmode != "disable":
+        qs["sslmode"] = [sslmode]
+        new_query = urlencode(qs, doseq=True)
+        return urlunparse(parsed._replace(query=new_query))
+    return url
+
+
+DATABASE_URL = _apply_sslmode(_db_url, DATABASE_SSLMODE)
 
 # Polymarket API
 POLYMARKET_CLOB_API = os.getenv("POLYMARKET_CLOB_API", "https://clob.polymarket.com")

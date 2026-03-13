@@ -27,6 +27,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://polymarket:polymarket@db:5432/polymarket
+      DATABASE_SSLMODE: disable
     env_file: .env
 
   news-collector:
@@ -38,6 +39,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://polymarket:polymarket@db:5432/polymarket
+      DATABASE_SSLMODE: disable
 
   feature-store:
     build: .
@@ -48,6 +50,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://polymarket:polymarket@db:5432/polymarket
+      DATABASE_SSLMODE: disable
 
   backtester:
     build: .
@@ -58,6 +61,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://polymarket:polymarket@db:5432/polymarket
+      DATABASE_SSLMODE: disable
 
   execution-bot:
     build: .
@@ -70,6 +74,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://polymarket:polymarket@db:5432/polymarket
+      DATABASE_SSLMODE: disable
 
   prometheus:
     image: prom/prometheus:latest
