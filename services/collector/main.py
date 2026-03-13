@@ -65,45 +65,70 @@ def _parse_outcome_prices(raw) -> float | None:
     return None
 
 
+def _parse_clob_token_ids(raw) -> list[str]:
+    """Parse clobTokenIds which can be a JSON string, list, or None."""
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [str(x) for x in raw if x]
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if raw.startswith("["):
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    return [str(x) for x in parsed if x]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if raw:
+            return [raw]
+    return []
+
+
+def _extract_market_id(market: dict) -> str:
+    """Extract market_id from a market dict with fallbacks."""
+    mid = market.get("id") or market.get("conditionId") or market.get("condition_id")
+    if not mid:
+        return ""
+    if isinstance(mid, list):
+        mid = mid[0] if mid else ""
+    return str(mid)
+
+
 async def collect_from_api():
     """Collect markets and sample data from Polymarket API."""
     rate_delay = 60.0 / max(API_RATE_LIMIT, 10) if API_RATE_LIMIT else 0.1
     client = PolymarketClient(POLYMARKET_GAMMA_API, POLYMARKET_CLOB_API, rate_limit_delay=rate_delay)
     session = SessionLocal()
     try:  # noqa: SIM117
-        events = await client.get_events(active=True, closed=False, limit=50)
+        events = await client.get_events_paginated(
+            active=True, closed=False, limit_per_page=100, max_pages=5,
+        )
         markets = markets_from_events(events)
         for m in markets:
-            market_id = m.get("id") or m.get("conditionId") or m.get("condition_id")
+            market_id = _extract_market_id(m)
             if not market_id:
                 continue
-            if isinstance(market_id, list):
-                market_id = market_id[0] if market_id else ""
-            market_id = str(market_id)
             upsert_market(session, {**m, "id": market_id})
 
         session.commit()
-        logger.info("Upserted %d markets from API", len(markets))
+        logger.info("Upserted %d markets from %d events", len(markets), len(events))
 
         now = datetime.now(timezone.utc)
         loaded = 0
-        for m in markets[:30]:
-            mid = m.get("id") or m.get("conditionId") or m.get("condition_id")
-            if isinstance(mid, list):
-                mid = mid[0] if mid else ""
+        for m in markets[:50]:
+            mid = _extract_market_id(m)
             if not mid:
                 continue
-            mid = str(mid)
-            asset_id = m.get("clobTokenIds") or []
-            if isinstance(asset_id, list) and asset_id:
-                asset_id = str(asset_id[0])
-            else:
-                asset_id = mid
+
+            token_ids = _parse_clob_token_ids(m.get("clobTokenIds"))
+            asset_id = token_ids[0] if token_ids else mid
+
             history = []
             try:
                 history = await client.get_prices_history(asset_id, interval="max")
             except Exception as e:
-                logger.debug("Price history for %s unavailable: %s", asset_id[:16], e)
+                logger.debug("Price history for %s unavailable: %s", mid, e)
             for pt in history:
                 ts_raw = pt.get("t") or pt.get("timestamp") or pt.get("ts")
                 if ts_raw is None:
@@ -144,6 +169,8 @@ async def collect_from_api():
         if loaded:
             session.commit()
             logger.info("Loaded %d price points from API", loaded)
+        else:
+            logger.warning("No price points loaded from API")
     except Exception as e:
         session.rollback()
         logger.exception("Collect error: %s", e)
