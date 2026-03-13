@@ -13,6 +13,7 @@ def client(tmp_path):
     """Client with file-based SQLite so all connections share the same DB."""
     db_file = tmp_path / "test.db"
     os.environ["DATABASE_URL"] = f"sqlite:///{db_file}"
+    os.environ["DATABASE_SSLMODE"] = "disable"
 
     import importlib
     import config.settings

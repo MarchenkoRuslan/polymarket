@@ -39,7 +39,13 @@ def root():
 
 @app.get("/health", include_in_schema=False)
 def health():
-    """Health check for load balancers."""
+    """Health check for load balancers. Returns 503 if DB migrations failed."""
+    import server
+    if server._migration_error is not None:
+        return PlainTextResponse(
+            f"UNHEALTHY: migration failed: {server._migration_error}",
+            status_code=503,
+        )
     return PlainTextResponse("OK")
 
 
