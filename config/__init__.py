@@ -6,6 +6,7 @@ from config.settings import (
     PMXT_ARCHIVE_URL,
     DEFAULT_FEE_BPS,
     API_RATE_LIMIT,
+    COLLECT_MARKETS_LIMIT,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "PMXT_ARCHIVE_URL",
     "DEFAULT_FEE_BPS",
     "API_RATE_LIMIT",
+    "COLLECT_MARKETS_LIMIT",
 ]
