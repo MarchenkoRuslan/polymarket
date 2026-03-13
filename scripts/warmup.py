@@ -3,6 +3,7 @@ import argparse
 import asyncio
 import logging
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -25,7 +26,6 @@ def main():
         asyncio.run(collect_from_api())
         if i < args.runs - 1:
             logger.info("Sleeping %ds...", args.interval)
-            import time
             time.sleep(args.interval)
     logger.info("Warmup done")
 
