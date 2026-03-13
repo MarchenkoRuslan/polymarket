@@ -63,12 +63,12 @@ def test_run_pipeline_skips_ml_when_features_fail():
 
 
 def test_get_status_returns_dict():
-    """_get_status returns dict with expected keys even if DB is unavailable."""
+    """_get_status returns dict with all table keys even if DB is unavailable."""
     status = _get_status()
     assert isinstance(status, dict)
-    assert "db_ok" in status
-    assert "markets" in status
-    assert "trades" in status
+    for key in ("db_ok", "markets", "trades", "orderbook", "features",
+                "signals", "news", "fee_rates", "orders", "results"):
+        assert key in status, f"Missing key: {key}"
 
 
 def test_skip_lifespan_defaults_false():

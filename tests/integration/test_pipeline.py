@@ -144,3 +144,42 @@ def test_db_writer_insert_orderbook(db_session):
     r = db_session.execute(text("SELECT bid_price, ask_price FROM orderbook WHERE market_id = 'm5'")).fetchone()
     assert r[0] == 0.45
     assert r[1] == 0.55
+
+
+def test_db_writer_upsert_fee_rate(db_session):
+    """upsert_fee_rate inserts and updates fee rates."""
+    from services.collector.db_writer import upsert_fee_rate
+
+    upsert_fee_rate(db_session, "token_abc", 30)
+    db_session.commit()
+    r = db_session.execute(
+        text("SELECT token_id, base_fee_bps FROM fee_rates WHERE token_id = 'token_abc'")
+    ).fetchone()
+    assert r[0] == "token_abc"
+    assert r[1] == 30
+
+    upsert_fee_rate(db_session, "token_abc", 50)
+    db_session.commit()
+    r = db_session.execute(
+        text("SELECT base_fee_bps FROM fee_rates WHERE token_id = 'token_abc'")
+    ).fetchone()
+    assert r[0] == 50
+
+
+def test_db_writer_upsert_fee_rate_multiple_tokens(db_session):
+    """upsert_fee_rate handles multiple tokens independently."""
+    from services.collector.db_writer import upsert_fee_rate
+
+    upsert_fee_rate(db_session, "token_1", 20)
+    upsert_fee_rate(db_session, "token_2", 40)
+    db_session.commit()
+    count = db_session.execute(text("SELECT COUNT(*) FROM fee_rates")).scalar()
+    assert count == 2
+    r1 = db_session.execute(
+        text("SELECT base_fee_bps FROM fee_rates WHERE token_id = 'token_1'")
+    ).fetchone()
+    r2 = db_session.execute(
+        text("SELECT base_fee_bps FROM fee_rates WHERE token_id = 'token_2'")
+    ).fetchone()
+    assert r1[0] == 20
+    assert r2[0] == 40
