@@ -1,15 +1,15 @@
 # Polymarket Trading System
 
-Автоматизированная система для торговли на прогнозных рынках Polymarket: сбор данных → расчёт фичей → ML-модели → бэктестинг → Execution Bot.
+Automated system for trading on Polymarket prediction markets: data collection → feature calculation → ML models → backtesting → Execution Bot.
 
-## Требования
+## Requirements
 
 - Python 3.11+
-- Docker (опционально, для Railway или локального PostgreSQL)
+- Docker (optional, for Railway or local PostgreSQL)
 
-## Быстрый старт
+## Quick Start
 
-### Web API + сбор данных (рекомендуется)
+### Web API + data collection (recommended)
 
 ```powershell
 python -m venv venv
@@ -17,19 +17,19 @@ python -m venv venv
 pip install -r requirements.txt
 copy .env.example .env
 .\run.ps1 init
-.\run.ps1 seed      # или warmup для реальных данных
-.\run.ps1 server    # FastAPI + Swagger на http://localhost:8000
+.\run.ps1 seed      # or warmup for real data
+.\run.ps1 server    # FastAPI + Swagger at http://localhost:8000
 ```
 
 - **Swagger UI**: http://localhost:8000/docs  
 - **API**: `/api/v1/markets`, `/api/v1/trades`, `/api/v1/orderbook`, `/api/v1/signals`, `/api/v1/status`  
-- **Полный pipeline** в фоне: collector → features → ML (при старте и каждые 15 мин)
+- **Full pipeline** in background: collector → features → ML (on startup and every 15 min)
 
-### Полный пайплайн (без web)
+### Full pipeline (without web)
 
 ```powershell
 .\run.ps1 init
-.\run.ps1 seed      # или warmup
+.\run.ps1 seed      # or warmup
 .\run.ps1 collect
 .\run.ps1 features
 .\run.ps1 ml
@@ -37,19 +37,19 @@ copy .env.example .env
 .\run.ps1 bot
 ```
 
-Демо-данные: `.\run.ps1 seed`. Реальные данные: `.\run.ps1 warmup` (~5 мин).
+Demo data: `.\run.ps1 seed`. Real data: `.\run.ps1 warmup` (~5 min).
 
-### Локальный запуск (Docker Compose)
+### Local run (Docker Compose)
 
 ```bash
 cp .env.example .env
-# В .env задать DATABASE_URL=postgresql://polymarket:polymarket@localhost:5432/polymarket
+# In .env set DATABASE_URL=postgresql://polymarket:polymarket@localhost:5432/polymarket
 docker compose up -d db
-# Дождаться готовности БД, затем:
+# Wait for DB readiness, then:
 docker compose up -d
 ```
 
-### Локальная разработка (PostgreSQL)
+### Local development (PostgreSQL)
 
 ```bash
 pip install -r requirements.txt
@@ -57,74 +57,74 @@ cp .env.example .env
 # DATABASE_URL=postgresql://...
 alembic upgrade head
 python -m services.collector.main
-# и т.д.
+# etc.
 ```
 
-## Сервисы
+## Services
 
-| Сервис | Описание |
-|--------|----------|
-| **Web API** | FastAPI, Swagger UI. Эндпоинты: markets, trades, orderbook, signals, status. Полный pipeline (collect→features→ml) в фоне |
-| `collector` | Сбор данных Polymarket API (Gamma, CLOB) и PMXT Parquet |
-| `news_collector` | Сбор RSS-новостей с фильтрацией по ключевым словам |
-| `feature_store` | Фичи: MA, volatility, RSI, MACD, spread, volume |
-| `ml_module` | Обучение моделей (LR, RF, XGBoost), генерация сигналов |
-| `backtester` | Симуляция с комиссиями, проскальзыванием, сигналами 1/0/-1 |
-| `execution_bot` | Размещение ордеров через py-clob-client (dry-run по умолчанию) |
-| `prometheus` | Метрики (порт 9090) |
-| `grafana` | Дашборды (порт 3000) |
+| Service | Description |
+|---------|-------------|
+| **Web API** | FastAPI, Swagger UI. Endpoints: markets, trades, orderbook, signals, status. Full pipeline (collect→features→ml) in background |
+| `collector` | Polymarket API data collection (Gamma, CLOB) and PMXT Parquet |
+| `news_collector` | RSS news collection with keyword filtering |
+| `feature_store` | Features: MA, volatility, RSI, MACD, spread, volume |
+| `ml_module` | Model training (LR, RF, XGBoost), signal generation |
+| `backtester` | Simulation with fees, slippage, signals 1/0/-1 |
+| `execution_bot` | Order placement via py-clob-client (dry-run by default) |
+| `prometheus` | Metrics (port 9090) |
+| `grafana` | Dashboards (port 3000) |
 
-## Загрузка данных
+## Data Loading
 
-### Реальные данные (Polymarket API)
+### Real data (Polymarket API)
 
-Коллектор загружает:
-- **Рынки** — из Gamma API (активные события)
-- **Цены** — из CLOB `prices-history` (если доступно) или текущие `lastTradePrice` из Gamma
+Collector loads:
+- **Markets** — from Gamma API (active events)
+- **Prices** — from CLOB `prices-history` (if available) or current `lastTradePrice` from Gamma
 
 ```powershell
 .\run.ps1 collect
 ```
 
-Запускайте `collect` регулярно (например, раз в час по cron/Task Scheduler), чтобы накопить историю для ML.
+Run `collect` regularly (e.g. hourly via cron/Task Scheduler) to accumulate history for ML.
 
-### Демо-данные (без API)
+### Demo data (no API)
 
 ```powershell
-.\run.ps1 seed   # 2 рынка, 350 сделок
+.\run.ps1 seed   # 2 markets, 350 trades
 ```
 
-### PMXT (исторические Parquet)
+### PMXT (historical Parquet)
 
 ```powershell
 .\run.ps1 pmxt --start 2026-03-10 --hours 6
 ```
 
-- **Почасовой формат** (по умолчанию): `polymarket_{trades|orderbook}_{date}T{hour}.parquet`
-- **Легаси (дневной)**: `.\run.ps1 pmxt --legacy --days 7`
-- Параметры: `--start`, `--hours`, `--url`, `--legacy`, `--days`
+- **Hourly format** (default): `polymarket_{trades|orderbook}_{date}T{hour}.parquet`
+- **Legacy (daily)**: `.\run.ps1 pmxt --legacy --days 7`
+- Options: `--start`, `--hours`, `--url`, `--legacy`, `--days`
 
-## Конфигурация
+## Configuration
 
-Переменные окружения (см. `.env.example`):
+Environment variables (see `.env.example`):
 
-| Переменная | Описание |
-|------------|----------|
+| Variable | Description |
+|----------|-------------|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `POLYMARKET_CLOB_API` | CLOB API URL |
 | `POLYMARKET_GAMMA_API` | Gamma API URL |
-| `PMXT_ARCHIVE_URL` | URL архива PMXT |
-| `DEFAULT_FEE_BPS` | Комиссия в базисных пунктах (30 = 0.3%) |
-| `API_RATE_LIMIT` | Лимит запросов в минуту (для PolymarketClient) |
-| `POLYMARKET_DRY_RUN` | `true` (по умолчанию) — симуляция ордеров |
-| `POLYMARKET_PRIVATE_KEY` | Приватный ключ для реальной торговли |
-| `POLYMARKET_PASSPHRASE` | Пароль для API credentials |
-| `NEWS_KEYWORDS` | Ключевые слова для фильтрации новостей (через запятую) |
-| `RSS_FEEDS` | URL RSS-лент через запятую |
-| `COLLECT_INTERVAL_SEC` | Интервал pipeline в фоне (по умолчанию 900 = 15 мин) |
-| `COLLECT_DEFER_SEC` | Задержка перед первым запуском pipeline (по умолчанию 5 с) |
+| `PMXT_ARCHIVE_URL` | PMXT archive URL |
+| `DEFAULT_FEE_BPS` | Fee in basis points (30 = 0.3%) |
+| `API_RATE_LIMIT` | Requests per minute (for PolymarketClient) |
+| `POLYMARKET_DRY_RUN` | `true` (default) — order simulation |
+| `POLYMARKET_PRIVATE_KEY` | Private key for real trading |
+| `POLYMARKET_PASSPHRASE` | API credentials passphrase |
+| `NEWS_KEYWORDS` | Keywords for news filtering (comma-separated) |
+| `RSS_FEEDS` | RSS feed URLs (comma-separated) |
+| `COLLECT_INTERVAL_SEC` | Background pipeline interval (default 900 = 15 min) |
+| `COLLECT_DEFER_SEC` | Delay before first pipeline run (default 5 sec) |
 
-## Тестирование
+## Testing
 
 ```bash
 pip install -r requirements.txt
@@ -132,44 +132,44 @@ python -m pytest tests/ -v
 ruff check .
 ```
 
-- Unit-тесты: backtester, features, risk, collector, orders, news, **API** (FastAPI)
-- Интеграционные: конвейер collector → features → ml → backtest (SQLite)
-- Стресс-тесты: удвоение fee, высокое проскальзывание, волатильность
+- Unit tests: backtester, features, risk, collector, orders, news, **API** (FastAPI)
+- Integration: pipeline collector → features → ml → backtest (SQLite)
+- Stress tests: double fee, high slippage, volatility
 
-## Деплой
+## Deployment
 
 ### Railway
 
-См. [docs/RAILWAY.md](docs/RAILWAY.md):
+See [docs/RAILWAY.md](docs/RAILWAY.md):
 
 - FastAPI + Swagger, PostgreSQL
-- Полный pipeline (collector → features → ML) в фоне
-- Cron для сбора, Backtest — при необходимости
+- Full pipeline (collector → features → ML) in background
+- Cron for collection, Backtest — as needed
 
 ### Docker Compose
 
-1. Настроить `.env` на целевом окружении
+1. Configure `.env` for target environment
 2. `docker compose up -d`
-3. Миграции: `docker compose run --rm collector alembic upgrade head`
-4. При необходимости — загрузка PMXT через `scripts/load_pmxt.py`
-5. Для реальной торговли: `POLYMARKET_DRY_RUN=false`, задать `POLYMARKET_PRIVATE_KEY`
+3. Migrations: `docker compose run --rm collector alembic upgrade head`
+4. If needed — PMXT load via `scripts/load_pmxt.py`
+5. For real trading: `POLYMARKET_DRY_RUN=false`, set `POLYMARKET_PRIVATE_KEY`
 
-## Устранение неполадок
+## Troubleshooting
 
-| Проблема | Решение |
-|----------|---------|
-| Пустые `markets`, `trades` | Запустите `.\run.ps1 seed` или `.\run.ps1 pmxt --hours 6`, затем `.\run.ps1 warmup` для реальных данных |
-| Пустые `features`, `signals` | Pipeline идёт после collector. Проверьте `/api/v1/status`: `last_features_error`, `last_ml_error` |
-| ML: «only one class in data» | Недостаточно разнообразия цен. Добавьте данные (PMXT, warmup) |
-| `market_id` required | API не требует market_id в запросе — все query params опциональны |
+| Issue | Solution |
+|-------|----------|
+| Empty `markets`, `trades` | Run `.\run.ps1 seed` or `.\run.ps1 pmxt --hours 6`, then `.\run.ps1 warmup` for real data |
+| Empty `features`, `signals` | Pipeline runs after collector. Check `/api/v1/status`: `last_features_error`, `last_ml_error` |
+| ML: "only one class in data" | Insufficient price diversity. Add data (PMXT, warmup) |
+| `market_id` required | API does not require market_id in request — all query params optional |
 
-## Риски
+## Risks
 
-- Юридические ограничения на ставки (US/CA)
-- KYC для Kalshi
-- Проверьте правила площадки перед реальной торговлей
-- `market_id` (condition_id) ≠ `token_id` — для реальных ордеров нужен token_id из Gamma API
+- Legal restrictions on prediction markets (US/CA)
+- KYC for Kalshi
+- Check platform rules before real trading
+- `market_id` (condition_id) ≠ `token_id` — real orders require token_id from Gamma API
 
-## Лицензия
+## License
 
 MIT

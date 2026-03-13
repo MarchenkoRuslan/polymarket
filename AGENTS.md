@@ -1,57 +1,57 @@
-# Инструкции для агента
+# Agent Instructions
 
-Руководство для AI-агента при работе с проектом Polymarket Trading System.
+Guide for AI agent working with Polymarket Trading System project.
 
-## Контекст проекта
+## Project Context
 
-Автоматизированная система для торговли на прогнозных рынках Polymarket. Полный конвейер: сбор данных (API + PMXT) → новости (RSS) → расчёт фичей → ML-модели → бэктестинг → исполнение ордеров (py-clob-client, dry-run по умолчанию).
+Automated system for trading on Polymarket prediction markets. Full pipeline: data collection (API + PMXT) → news (RSS) → feature calculation → ML models → backtesting → order execution (py-clob-client, dry-run by default).
 
-## Структура и ответственность сервисов
+## Service Structure and Responsibilities
 
-| Сервис | Путь | Задача |
-|--------|------|--------|
-| **Web API** | `api/` | FastAPI, Swagger UI (`/docs`). Эндпоинты: markets, trades, orderbook, signals, status. Lifespan: init_db + pipeline (collector→features→ml) в фоне |
-| Web Server | `server.py` | uvicorn + тот же FastAPI app. Pipeline в фоне. Для Railway/продакшена |
+| Service | Path | Task |
+|---------|------|------|
+| **Web API** | `api/` | FastAPI, Swagger UI (`/docs`). Endpoints: markets, trades, orderbook, signals, status. Lifespan: init_db + pipeline (collector→features→ml) in background |
+| Web Server | `server.py` | uvicorn + same FastAPI app. Pipeline in background. For Railway/production |
 | Data Collector | `services/collector/` | Polymarket API (Gamma, CLOB), PMXT Parquet → `markets`, `trades`, `orderbook` |
-| News Collector | `services/news_collector/` | RSS → фильтр по ключевым словам → таблица `news` |
+| News Collector | `services/news_collector/` | RSS → keyword filter → `news` table |
 | Feature Store | `services/feature_store/` | MA, volatility, RSI, MACD, spread, volume → `features` |
-| ML Module | `services/ml_module/` | LR, RF, XGBoost, walk-forward → сигналы в `signals` |
-| Backtester | `services/backtester/` | Симуляция с комиссиями и проскальзыванием. Сигналы: 1=buy, 0=hold, -1=sell |
-| Execution Bot | `services/execution_bot/` | py-clob-client, риск-менеджмент (Kelly, лимиты, stop-loss). По умолчанию dry_run |
+| ML Module | `services/ml_module/` | LR, RF, XGBoost, walk-forward → signals in `signals` |
+| Backtester | `services/backtester/` | Simulation with fees, slippage. Signals: 1=buy, 0=hold, -1=sell |
+| Execution Bot | `services/execution_bot/` | py-clob-client, risk management (Kelly, limits, stop-loss). Default dry_run |
 
-## База данных
+## Database
 
-- PostgreSQL / SQLite, подключение через `DATABASE_URL`
-- Схема: `db/schema_sqlite.sql` (локально), миграции: `db/migrations/` (Alembic)
-- Таблицы: `markets`, `orderbook`, `trades`, `fee_rates`, `features`, `news`, `signals`, `orders`, `results`
+- PostgreSQL / SQLite, connection via `DATABASE_URL`
+- Schema: `db/schema_sqlite.sql` (local), migrations: `db/migrations/` (Alembic)
+- Tables: `markets`, `orderbook`, `trades`, `fee_rates`, `features`, `news`, `signals`, `orders`, `results`
 
-## Правила при изменении кода
+## Code Change Rules
 
-1. **Пути импорта**: `sys.path.insert(0, project_root)` в точках входа. Корень — родитель `services/`.
-2. **Конфиг**: переменные в `config/settings.py`, экспорт в `config/__init__.py`.
-3. **Линтинг**: ruff (`ruff.toml`), Python 3.11.
-4. **Бэктестер**: при изменении логики проверять комиссии (30 bps) и проскальзывание.
-5. **Валидация ML**: только walk-forward / TimeSeriesSplit, без утечки будущего.
-6. **Мутации**: не мутировать входные структуры (например, в `markets_from_events` создавать копии).
-7. **Время**: использовать `datetime.fromtimestamp(ts, tz=timezone.utc)` вместо `utcfromtimestamp`.
+1. **Import paths**: `sys.path.insert(0, project_root)` at entry points. Root — parent of `services/`.
+2. **Config**: variables in `config/settings.py`, export in `config/__init__.py`.
+3. **Linting**: ruff (`ruff.toml`), Python 3.11.
+4. **Backtester**: when changing logic, verify fees (30 bps) and slippage.
+5. **ML validation**: walk-forward / TimeSeriesSplit only, no future leakage.
+6. **Mutations**: do not mutate input structures (e.g. in `markets_from_events` create copies).
+7. **Time**: use `datetime.fromtimestamp(ts, tz=timezone.utc)` instead of `utcfromtimestamp`.
 
-## Частые задачи
+## Common Tasks
 
-- **Добавить фичу**: `services/feature_store/features.py` → `compute_*`, добавить в `FEATURE_COLS` в ML-модуле.
-- **Изменить модель**: `services/ml_module/models.py` (train_*, walk_forward_validate).
-- **Источник данных**: `services/collector/` (PolymarketClient, pmxt_loader).
-- **Риск**: `services/execution_bot/risk.py` (RiskConfig, position_size, should_stop_loss).
+- **Add feature**: `services/feature_store/features.py` → `compute_*`, add to `FEATURE_COLS` in ML module.
+- **Change model**: `services/ml_module/models.py` (train_*, walk_forward_validate).
+- **Data source**: `services/collector/` (PolymarketClient, pmxt_loader).
+- **Risk**: `services/execution_bot/risk.py` (RiskConfig, position_size, should_stop_loss).
 
-## Запуск
+## Run
 
 ```bash
-# Web API (FastAPI + Swagger, полный pipeline в фоне)
-uvicorn api.app:app --reload --port 8000   # или .\run.ps1 server
+# Web API (FastAPI + Swagger, full pipeline in background)
+uvicorn api.app:app --reload --port 8000   # or .\run.ps1 server
 
-# Альтернатива (тот же uvicorn, для продакшена)
+# Alternative (same uvicorn, for production)
 python server.py
 
-# Отдельные сервисы
+# Individual services
 python -m services.collector.main
 python -m services.news_collector.main
 python -m services.feature_store.main
@@ -59,33 +59,33 @@ python -m services.ml_module.main
 python -m services.backtester.main
 python -m services.execution_bot.main
 
-# Features + ML без collector (для cron, если collector идёт отдельно)
+# Features + ML without collector (for cron, if collector runs separately)
 python scripts/run_pipeline.py
 ```
 
-## Зависимости
+## Dependencies
 
-- **requirements.txt** — полный стек (ML, тесты, collector, feature_store, ml_module). Локально и CI.
-- Pipeline (features + ml) требует sklearn; для Railway — полный requirements.txt (pipeline встроен в web).
+- **requirements.txt** — full stack (ML, tests, collector, feature_store, ml_module). Local and CI.
+- Pipeline (features + ml) requires sklearn; for Railway — full requirements.txt (pipeline embedded in web).
 
-## Тесты
+## Tests
 
 ```bash
 python -m pytest tests/ -v
 ruff check .
 ```
 
-- Интеграционные тесты используют SQLite in-memory (conftest.py).
-- Стресс-тесты бэктестера: double fee, high slippage, volatility.
+- Integration tests use SQLite in-memory (conftest.py).
+- Backtester stress tests: double fee, high slippage, volatility.
 
-## Ограничения
+## Limitations
 
-- Приватные ключи — только в `.env`, не в коде.
-- Execution Bot: `POLYMARKET_DRY_RUN=true` по умолчанию; для реальной торговли нужен `token_id` (не market_id).
-- PMXT: структура Parquet может меняться — использовать fallback-поля в trades_to_rows / orderbook_to_rows.
+- Private keys — only in `.env`, never in code.
+- Execution Bot: `POLYMARKET_DRY_RUN=true` by default; for real trading need `token_id` (not market_id).
+- PMXT: Parquet structure may change — use fallback fields in trades_to_rows / orderbook_to_rows.
 
-## Документация
+## Documentation
 
-- **README.md** — быстрый старт, сервисы, конфигурация
-- **docs/ARCHITECTURE.md** — архитектура, таблицы, фичи, сигналы
-- **docs/RAILWAY.md** — деплой, pipeline, 502, логи Alembic, пустые таблицы, ML single-class
+- **README.md** — quick start, services, configuration
+- **docs/ARCHITECTURE.md** — architecture, tables, features, signals
+- **docs/RAILWAY.md** — deployment, pipeline, 502, Alembic logs, empty tables, ML single-class

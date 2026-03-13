@@ -1,24 +1,24 @@
 ---
-description: Polymarket Trading System — правила для агента
+description: Polymarket Trading System — agent rules
 globs: 
 alwaysApply: true
 ---
 
 # Polymarket Project Rules
 
-Перед изменениями читай **AGENTS.md** — там структура сервисов, БД, правила кода.
+Read **AGENTS.md** before making changes — service structure, DB, and code rules are there.
 
-## Ключевое
+## Key
 
 - **Web API**: `api/` (FastAPI), `server.py` (uvicorn + pipeline)
-- **Точка входа**: `uvicorn api.app:app` или `python server.py`
-- **Pipeline**: collector → feature_store → ml_module (в фоне при старте)
-- **БД**: Alembic миграции в `db/migrations/`, `db/schema_sqlite.sql` для локального SQLite
-- **Зависимости**: `requirements.txt` (полный стек, ML для pipeline)
-- **Линтинг**: `ruff check .`
+- **Entry point**: `uvicorn api.app:app` or `python server.py`
+- **Pipeline**: collector → feature_store → ml_module (in background on startup)
+- **DB**: Alembic migrations in `db/migrations/`, `db/schema_sqlite.sql` for local SQLite
+- **Dependencies**: `requirements.txt` (full stack, ML for pipeline)
+- **Linting**: `ruff check .`
 
-## Документация
+## Documentation
 
-- README.md — быстрый старт, сервисы
-- docs/ARCHITECTURE.md — диаграмма, таблицы, API
-- docs/RAILWAY.md — деплой, pipeline, устранение неполадок
+- README.md — quick start, services
+- docs/ARCHITECTURE.md — diagram, tables, API
+- docs/RAILWAY.md — deployment, pipeline, troubleshooting

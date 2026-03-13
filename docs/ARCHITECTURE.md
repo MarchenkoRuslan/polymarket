@@ -1,4 +1,4 @@
-# Архитектура системы
+# System Architecture
 
 ```
 ┌─────────────────┐   ┌─────────────────┐
@@ -33,56 +33,56 @@
                         └─────────────────────┘
 ```
 
-Web API (FastAPI, `/docs`) читает данные из БД и запускает **полный pipeline** в фоне: collector → feature_store → ml_module.
+Web API (FastAPI, `/docs`) reads data from DB and runs the **full pipeline** in background: collector → feature_store → ml_module.
 
-### Эндпоинты API
+### API Endpoints
 
-| Путь | Описание |
-|------|----------|
+| Path | Description |
+|------|-------------|
 | `GET /docs` | Swagger UI |
-| `GET /api/v1/markets` | Список рынков (limit, offset) |
-| `GET /api/v1/markets/{market_id}` | Один рынок |
-| `GET /api/v1/trades` | Сделки (market_id опционально, limit, offset) |
-| `GET /api/v1/orderbook` | Снимки стакана (market_id опционально, limit, offset) |
-| `GET /api/v1/signals` | ML-сигналы (market_id опционально, limit, offset) |
+| `GET /api/v1/markets` | Market list (limit, offset) |
+| `GET /api/v1/markets/{market_id}` | Single market |
+| `GET /api/v1/trades` | Trades (market_id optional, limit, offset) |
+| `GET /api/v1/orderbook` | Order book snapshots (market_id optional, limit, offset) |
+| `GET /api/v1/signals` | ML signals (market_id optional, limit, offset) |
 | `GET /api/v1/status` | db_ok, counts (markets, trades, orderbook, features, signals), last_*_error |
 
-## Таблицы БД
+## Database Tables
 
-| Таблица | Описание |
-|---------|----------|
-| `markets` | Метаданные рынков (question, end_date, outcome_settled) |
-| `orderbook` | Снимки стакана (bid/ask, qty) |
-| `trades` | Сделки (price, size, side) |
-| `fee_rates` | Комиссии по токенам |
-| `features` | Рассчитанные фичи (market_id, ts, feature_name, value) |
-| `news` | Новости из RSS (title, link, summary) |
-| `signals` | Сигналы модели (prediction) |
-| `orders` | Наши ордера |
-| `results` | Результаты бэктеста |
+| Table | Description |
+|-------|-------------|
+| `markets` | Market metadata (question, end_date, outcome_settled) |
+| `orderbook` | Order book snapshots (bid/ask, qty) |
+| `trades` | Trades (price, size, side) |
+| `fee_rates` | Token fees |
+| `features` | Computed features (market_id, ts, feature_name, value) |
+| `news` | RSS news (title, link, summary) |
+| `signals` | Model signals (prediction) |
+| `orders` | Our orders |
+| `results` | Backtest results |
 
-Индексы: `(market_id, ts)` на orderbook, trades, features.
+Indexes: `(market_id, ts)` on orderbook, trades, features.
 
-## Фичи
+## Features
 
-- **Ценовые**: ma_1h, ma_5m, volatility_1h, roc_1h, rsi_14, macd, macd_signal, macd_hist
-- **Объёмные**: volume_1h, volume_5m
-- **Ликвидность**: spread, spread_bps (при наличии bid/ask)
+- **Price**: ma_1h, ma_5m, volatility_1h, roc_1h, rsi_14, macd, macd_signal, macd_hist
+- **Volume**: volume_1h, volume_5m
+- **Liquidity**: spread, spread_bps (when bid/ask available)
 
-## Сигналы бэктестера
+## Backtester Signals
 
 - `1` — buy (prediction ≥ 0.5)
 - `0` — hold (0.3 ≤ prediction < 0.5)
 - `-1` — sell (prediction < 0.3)
 
-## Валидация модели
+## Model Validation
 
 - TimeSeriesSplit / walk-forward
-- Запрет утечки: train до t, test на t+1..t+k
-- Если в target только один класс (все цены идут вниз/вверх) — рынок пропускается: `single class in target, skipping`
+- No leakage: train up to t, test on t+1..t+k
+- If target has only one class (all prices up/down) — market skipped: `single class in target, skipping`
 
 ## Execution Bot
 
-- По умолчанию: `POLYMARKET_DRY_RUN=true` — ордера не отправляются
-- Реальная торговля: `POLYMARKET_DRY_RUN=false`, задать `POLYMARKET_PRIVATE_KEY`
-- `market_id` (condition_id) ≠ `token_id` — для ордеров через CLOB нужен token_id
+- Default: `POLYMARKET_DRY_RUN=true` — orders not sent
+- Real trading: `POLYMARKET_DRY_RUN=false`, set `POLYMARKET_PRIVATE_KEY`
+- `market_id` (condition_id) ≠ `token_id` — CLOB orders need token_id

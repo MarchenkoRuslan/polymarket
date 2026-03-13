@@ -1,112 +1,112 @@
-# Деплой на Railway
+# Railway Deployment
 
-## 1. Проект и база данных
+## 1. Project and Database
 
-1. Создайте проект в [Railway](https://railway.app)
-2. **Add PostgreSQL** — добавит переменную `DATABASE_URL`
-3. **Deploy from GitHub** — подключите репозиторий
+1. Create a project on [Railway](https://railway.app)
+2. **Add PostgreSQL** — adds `DATABASE_URL` variable
+3. **Deploy from GitHub** — connect your repository
 
-## 2. Переменные окружения
+## 2. Environment Variables
 
-Добавьте в Settings сервиса:
+Add to service Settings:
 
-| Переменная | Значение |
-|------------|----------|
-| `DATABASE_URL` | Автоматически от PostgreSQL |
+| Variable | Value |
+|----------|-------|
+| `DATABASE_URL` | Auto from PostgreSQL |
 | `POLYMARKET_CLOB_API` | `https://clob.polymarket.com` |
 | `POLYMARKET_GAMMA_API` | `https://gamma-api.polymarket.com` |
 | `API_RATE_LIMIT` | `60` |
-| `COLLECT_INTERVAL_SEC` | `900` (15 мин), опционально |
-| `COLLECT_DEFER_SEC` | `5` — задержка перед первым сбором (сек), чтобы HTTP успел подняться |
+| `COLLECT_INTERVAL_SEC` | `900` (15 min), optional |
+| `COLLECT_DEFER_SEC` | `5` — delay before first collection (sec), so HTTP is up before heavy Polymarket API calls |
 
-## 3. Инициализация БД
+## 3. Database Initialization
 
-Миграции применяются **автоматически** при старте сервера. Таблицы создадутся при первом запуске, если `DATABASE_URL` настроен.
+Migrations run **automatically** on server startup. Tables are created on first run when `DATABASE_URL` is set.
 
-## 4. Web-сервис + полный pipeline
+## 4. Web Service + Full Pipeline
 
-**Start Command** (в Settings → Deploy):
+**Start Command** (in Settings → Deploy):
 ```bash
 uvicorn api.app:app --host 0.0.0.0 --port $PORT
 ```
 
-Основной сервис — FastAPI (`api.app`):
-- `/` и `/health` — health check
+Main service — FastAPI (`api.app`):
+- `/` and `/health` — health check
 - `/docs` — Swagger UI
-- `/api/v1/markets`, `/api/v1/trades`, `/api/v1/orderbook`, `/api/v1/signals`, `/api/v1/status` — данные из БД
-- **Полный pipeline в фоне**: collector → feature_store → ml_module (при старте и каждые 15 мин)
+- `/api/v1/markets`, `/api/v1/trades`, `/api/v1/orderbook`, `/api/v1/signals`, `/api/v1/status` — data from DB
+- **Full pipeline in background**: collector → feature_store → ml_module (on startup and every 15 min)
 
-Интервал: `COLLECT_INTERVAL_SEC=900` (по умолчанию). Для более частого — `600` (10 мин) или `300` (5 мин).
+Interval: `COLLECT_INTERVAL_SEC=900` (default). For more frequent — `600` (10 min) or `300` (5 min).
 
-Альтернатива: `python server.py` (тот же uvicorn + pipeline)
+Alternative: `python server.py` (same uvicorn + pipeline)
 
-## 5. Устранение неполадок
+## 5. Troubleshooting
 
 ### 502 Bad Gateway
 
-Проверьте:
+Check:
 
-- **Start Command** — ровно `uvicorn api.app:app --host 0.0.0.0 --port $PORT` (без лишних команд).
-- **Порт** — `$PORT` подставляется Railway; без `--host 0.0.0.0` прокси не достучится.
-- **Логи** — после строк Alembic ищите traceback или перезапуски контейнера.
+- **Start Command** — exactly `uvicorn api.app:app --host 0.0.0.0 --port $PORT` (no extra commands).
+- **Port** — `$PORT` is substituted by Railway; without `--host 0.0.0.0` proxy cannot reach the app.
+- **Logs** — after Alembic lines look for traceback or container restarts.
 
-Переменная `COLLECT_DEFER_SEC=5` (по умолчанию) откладывает первый сбор на 5 секунд, чтобы HTTP успел подняться до тяжёлых запросов к Polymarket API.
+Variable `COLLECT_DEFER_SEC=5` (default) delays first collection by 5 seconds so HTTP is up before heavy Polymarket API requests.
 
-### Логи Alembic как «error»
+### Alembic Logs as "error"
 
-Сообщения вида `INFO [alembic.runtime.migration] Context impl PostgresqlImpl` Alembic пишет в **stderr**. На Railway stderr часто помечается как `severity: error`, хотя это обычный INFO. Это **не сбой миграций**. Если таблицы созданы — всё в порядке.
+Messages like `INFO [alembic.runtime.migration] Context impl PostgresqlImpl` Alembic writes to **stderr**. On Railway stderr is often tagged as `severity: error` even though it's normal INFO. This is **not a migration failure**. If tables exist — you're fine.
 
-### Пустые таблицы
+### Empty Tables
 
-Web-сервис запускает **полный pipeline** (collector → features → ml), поэтому `markets`, `trades`, `orderbook`, `features`, `signals` должны заполняться автоматически.
+Web service runs the **full pipeline** (collector → features → ml), so `markets`, `trades`, `orderbook`, `features`, `signals` should populate automatically.
 
-| Таблица | Источник |
-|---------|----------|
-| `markets`, `trades`, `orderbook` | Collector (в pipeline) |
-| `features`, `signals` | Feature Store + ML Module (в pipeline) |
-| `news` | `python -m services.news_collector.main` (отдельно) |
+| Table | Source |
+|-------|--------|
+| `markets`, `trades`, `orderbook` | Collector (in pipeline) |
+| `features`, `signals` | Feature Store + ML Module (in pipeline) |
+| `news` | `python -m services.news_collector.main` (separately) |
 | `orders`, `results` | Execution bot, backtester |
 
-Проверьте `/api/v1/status`: counts, `last_collect_error`, `last_features_error`, `last_ml_error`, `last_pipeline_error`.
+Check `/api/v1/status`: counts, `last_collect_error`, `last_features_error`, `last_ml_error`, `last_pipeline_error`.
 
-## 6. Cron Job (опционально)
+## 6. Cron Job (optional)
 
-Автосбор уже встроен в web-сервис. Отдельный Cron нужен только если хотите полностью отключить фоновый сбор и управлять им через расписание.
+Auto-collection is built into the web service. A separate Cron is only needed if you want to fully disable background collection and control it via schedule.
 
-Чтобы собирать данные через Cron:
+To collect via Cron:
 
-1. **New Service** в том же проекте
-2. Выберите **тот же репозиторий** (или подключите заново)
-3. **Settings → Cron Schedule**: `*/15 * * * *` (каждые 15 минут, UTC)
+1. **New Service** in the same project
+2. Select **the same repository** (or connect again)
+3. **Settings → Cron Schedule**: `*/15 * * * *` (every 15 minutes, UTC)
 4. **Settings → Deploy → Custom Start Command**:
    ```bash
    python -m services.collector.main
    ```
-5. Те же переменные окружения (или наследуйте от проекта)
-6. Отключите **Public Networking** — cron не должен слушать порт
+5. Same environment variables (or inherit from project)
+6. Disable **Public Networking** — cron should not listen on a port
 
-Сервис запустится по расписанию, выполнит сбор и завершится.
+The service will start on schedule, run collection, and exit.
 
-### Расписания
+### Schedules
 
-| Расписание | Cron | Описание |
-|------------|------|----------|
-| Каждые 15 мин | `*/15 * * * *` | ~96 точек/сутки на рынок |
-| Каждые 5 мин | `*/5 * * * *` | ~288 точек/сутки |
-| Каждые 30 мин | `*/30 * * * *` | ~48 точек/сутки |
+| Schedule | Cron | Description |
+|----------|------|-------------|
+| Every 15 min | `*/15 * * * *` | ~96 points/day per market |
+| Every 5 min | `*/5 * * * *` | ~288 points/day |
+| Every 30 min | `*/30 * * * *` | ~48 points/day |
 
-За 1–2 дня при `*/15` накопится 100–200 точек на рынок — достаточно для качественных предиктов.
+In 1–2 days with `*/15` you get 100–200 points per market — enough for quality predictions.
 
-## 7. Дополнительные Cron (опционально)
+## 7. Additional Cron Jobs (optional)
 
-Pipeline уже встроен в web-сервис. Отдельные Cron нужны только для:
+Pipeline is built into the web service. Separate Cron jobs are only for:
 
-- **Features + ML** (если collector идёт отдельным Cron, а web без pipeline):  
+- **Features + ML** (if collector runs as separate Cron and web has no pipeline):  
   Start Command `python scripts/run_pipeline.py`, Cron: `0 * * * *`
 
-- **Backtest** (раз в сутки): Start Command `python -m services.backtester.main`  
+- **Backtest** (daily): Start Command `python -m services.backtester.main`  
   Cron: `0 12 * * *`
 
-### Ошибка ML: «only one class in data»
+### ML Error: "only one class in data"
 
-Если в логах: `ValueError: This solver needs samples of at least 2 classes` — данные по рынку содержат только один класс (цены только растут или только падают). ML-модуль пропускает такие рынки. Нужно больше данных: warmup или PMXT.
+If logs show: `ValueError: This solver needs samples of at least 2 classes` — market data has only one class (prices only up or only down). ML module skips such markets. Need more data: warmup or PMXT.
