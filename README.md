@@ -21,8 +21,9 @@ copy .env.example .env
 .\run.ps1 server    # FastAPI + Swagger at http://localhost:8000
 ```
 
-- **Swagger UI**: http://localhost:8000/docs  
-- **API**: `/api/v1/markets`, `/api/v1/trades`, `/api/v1/orderbook`, `/api/v1/signals`, `/api/v1/status`  
+- **Swagger UI**: http://localhost:8000/docs
+- **Dashboard**: http://localhost:8000/dashboard (Status, Markets, Trades, Signals, Performance, News)
+- **API**: `/api/v1/markets`, `/api/v1/trades`, `/api/v1/orderbook`, `/api/v1/signals`, `/api/v1/status`, `/api/v1/features`, `/api/v1/news`, `/api/v1/results`, `/api/v1/analytics`
 - **Full pipeline** in background: collector → features → ML (on startup and every 15 min)
 
 ### Full pipeline (without web)
@@ -64,7 +65,7 @@ python -m services.collector.main
 
 | Service | Description |
 |---------|-------------|
-| **Web API** | FastAPI, Swagger UI. Endpoints: markets, trades, orderbook, signals, status. Full pipeline (collect→features→ml) in background |
+| **Web API** | FastAPI, Swagger UI, Dashboard at `/dashboard`. Endpoints: markets, trades, orderbook, signals, features, news, results, analytics, status. Full pipeline (collect→features→ml) in background |
 | `collector` | Polymarket API data collection (Gamma, CLOB) and PMXT Parquet |
 | `news_collector` | RSS news collection with keyword filtering |
 | `feature_store` | Features: MA, volatility, RSI, MACD, spread, volume |

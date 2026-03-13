@@ -10,46 +10,21 @@
 
 Add to service Settings:
 
-<<<<<<< HEAD
 | Variable | Value |
 |----------|-------|
 | `DATABASE_URL` | Auto from PostgreSQL |
-=======
-| Переменная | Значение |
-|------------|----------|
-| `DATABASE_URL` | Автоматически от PostgreSQL |
-| `DATABASE_SSLMODE` | `require` (рекомендуется для Railway). По умолчанию `prefer` — пробует SSL, fallback без SSL |
->>>>>>> 7660ebffd4e231be81248aaadd85d3d8852f2e8f
+| `DATABASE_SSLMODE` | `require` (recommended for Railway). Default `prefer` — tries SSL, fallback without |
 | `POLYMARKET_CLOB_API` | `https://clob.polymarket.com` |
 | `POLYMARKET_GAMMA_API` | `https://gamma-api.polymarket.com` |
 | `API_RATE_LIMIT` | `60` |
 | `COLLECT_INTERVAL_SEC` | `900` (15 min), optional |
 | `COLLECT_DEFER_SEC` | `5` — delay before first collection (sec), so HTTP is up before heavy Polymarket API calls |
 
-<<<<<<< HEAD
 ## 3. Database Initialization
-=======
-## 3. SSL-подключение к PostgreSQL
-
-Railway PostgreSQL автоматически генерирует SSL-сертификаты при инициализации.
-
-- **`DATABASE_SSLMODE=prefer`** (по умолчанию) — пробует SSL, если недоступен — подключается без. Безопасно для локальной разработки и продакшена
-- **`DATABASE_SSLMODE=require`** — SSL обязателен, рекомендуется для Railway (добавьте в переменные сервиса)
-- **`DATABASE_SSLMODE=disable`** — для локальной разработки без SSL
-- Если `DATABASE_URL` уже содержит `?sslmode=...`, значение из URL имеет приоритет
-
-Для локальной разработки с SQLite SSL игнорируется автоматически.
-
-## 4. Инициализация БД
->>>>>>> 7660ebffd4e231be81248aaadd85d3d8852f2e8f
 
 Migrations run **automatically** on server startup. Tables are created on first run when `DATABASE_URL` is set.
 
-<<<<<<< HEAD
 ## 4. Web Service + Full Pipeline
-=======
-## 5. Web-сервис + полный pipeline
->>>>>>> 7660ebffd4e231be81248aaadd85d3d8852f2e8f
 
 **Start Command** (in Settings → Deploy):
 ```bash
@@ -59,18 +34,15 @@ uvicorn api.app:app --host 0.0.0.0 --port $PORT
 Main service — FastAPI (`api.app`):
 - `/` and `/health` — health check
 - `/docs` — Swagger UI
-- `/api/v1/markets`, `/api/v1/trades`, `/api/v1/orderbook`, `/api/v1/signals`, `/api/v1/status` — data from DB
+- `/dashboard` — visual dashboard (Status, Markets, Trades, Signals, Performance, News; hash URLs: `/dashboard#signals`)
+- `/api/v1/markets`, `/api/v1/trades`, `/api/v1/orderbook`, `/api/v1/signals`, `/api/v1/features`, `/api/v1/news`, `/api/v1/results`, `/api/v1/analytics`, `/api/v1/status` — data from DB
 - **Full pipeline in background**: collector → feature_store → ml_module (on startup and every 15 min)
 
 Interval: `COLLECT_INTERVAL_SEC=900` (default). For more frequent — `600` (10 min) or `300` (5 min).
 
 Alternative: `python server.py` (same uvicorn + pipeline)
 
-<<<<<<< HEAD
 ## 5. Troubleshooting
-=======
-## 6. Устранение неполадок
->>>>>>> 7660ebffd4e231be81248aaadd85d3d8852f2e8f
 
 ### 502 Bad Gateway
 
@@ -99,11 +71,7 @@ Web service runs the **full pipeline** (collector → features → ml), so `mark
 
 Check `/api/v1/status`: counts, `last_collect_error`, `last_features_error`, `last_ml_error`, `last_pipeline_error`.
 
-<<<<<<< HEAD
 ## 6. Cron Job (optional)
-=======
-## 7. Cron Job (опционально)
->>>>>>> 7660ebffd4e231be81248aaadd85d3d8852f2e8f
 
 Auto-collection is built into the web service. A separate Cron is only needed if you want to fully disable background collection and control it via schedule.
 
@@ -131,11 +99,7 @@ The service will start on schedule, run collection, and exit.
 
 In 1–2 days with `*/15` you get 100–200 points per market — enough for quality predictions.
 
-<<<<<<< HEAD
 ## 7. Additional Cron Jobs (optional)
-=======
-## 8. Дополнительные Cron (опционально)
->>>>>>> 7660ebffd4e231be81248aaadd85d3d8852f2e8f
 
 Pipeline is built into the web service. Separate Cron jobs are only for:
 

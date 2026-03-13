@@ -10,7 +10,7 @@ Read **AGENTS.md** before making changes — service structure, DB, and code rul
 
 ## Key
 
-- **Web API**: `api/` (FastAPI), `server.py` (uvicorn + pipeline)
+- **Web API**: `api/` (FastAPI, `/docs`, `/dashboard`), `server.py` (uvicorn + pipeline)
 - **Entry point**: `uvicorn api.app:app` or `python server.py`
 - **Pipeline**: collector → feature_store → ml_module (in background on startup)
 - **DB**: Alembic migrations in `db/migrations/`, `db/schema_sqlite.sql` for local SQLite
