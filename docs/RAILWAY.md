@@ -23,7 +23,7 @@
 
 Миграции применяются **автоматически** при старте сервера. Таблицы создадутся при первом запуске, если `DATABASE_URL` настроен.
 
-## 4. Web-сервис + автосбор
+## 4. Web-сервис + полный pipeline
 
 **Start Command** (в Settings → Deploy):
 ```bash
@@ -33,12 +33,12 @@ uvicorn api.app:app --host 0.0.0.0 --port $PORT
 Основной сервис — FastAPI (`api.app`):
 - `/` и `/health` — health check
 - `/docs` — Swagger UI
-- `/api/v1/markets`, `/api/v1/trades`, `/api/v1/status` — данные из БД
-- **Автоматически собирает данные** в фоне: при старте и каждые 15 мин
+- `/api/v1/markets`, `/api/v1/trades`, `/api/v1/orderbook`, `/api/v1/signals`, `/api/v1/status` — данные из БД
+- **Полный pipeline в фоне**: collector → feature_store → ml_module (при старте и каждые 15 мин)
 
-Интервал: `COLLECT_INTERVAL_SEC=900` (по умолчанию). Для более частого сбора задайте `600` (10 мин) или `300` (5 мин).
+Интервал: `COLLECT_INTERVAL_SEC=900` (по умолчанию). Для более частого — `600` (10 мин) или `300` (5 мин).
 
-Альтернатива (без Swagger): `python server.py`
+Альтернатива: `python server.py` (тот же uvicorn + pipeline)
 
 ## 5. Устранение неполадок
 
@@ -58,17 +58,16 @@ uvicorn api.app:app --host 0.0.0.0 --port $PORT
 
 ### Пустые таблицы
 
-Таблицы заполняются разными сервисами:
+Web-сервис запускает **полный pipeline** (collector → features → ml), поэтому `markets`, `trades`, `orderbook`, `features`, `signals` должны заполняться автоматически.
 
 | Таблица | Источник |
 |---------|----------|
-| `markets`, `trades` | Collector (web-сервис или cron) |
-| `orderbook` | Collector (при наличии данных) |
-| `features`, `signals` | `python scripts/run_pipeline.py` (feature_store + ml_module) |
-| `news` | `python -m services.news_collector.main` |
+| `markets`, `trades`, `orderbook` | Collector (в pipeline) |
+| `features`, `signals` | Feature Store + ML Module (в pipeline) |
+| `news` | `python -m services.news_collector.main` (отдельно) |
 | `orders`, `results` | Execution bot, backtester |
 
-При одном только web-сервисе пустые `features`, `signals`, `news` — норма. Проверьте `/api/v1/status`: `markets`, `trades`, `last_collect_error`.
+Проверьте `/api/v1/status`: counts, `last_collect_error`, `last_features_error`, `last_ml_error`, `last_pipeline_error`.
 
 ## 6. Cron Job (опционально)
 
@@ -100,12 +99,14 @@ uvicorn api.app:app --host 0.0.0.0 --port $PORT
 
 ## 7. Дополнительные Cron (опционально)
 
-Можно добавить отдельные сервисы для:
+Pipeline уже встроен в web-сервис. Отдельные Cron нужны только для:
 
-- **Features + ML** (раз в час): Start Command `python scripts/run_pipeline.py`  
-  Cron: `0 * * * *`
+- **Features + ML** (если collector идёт отдельным Cron, а web без pipeline):  
+  Start Command `python scripts/run_pipeline.py`, Cron: `0 * * * *`
 
 - **Backtest** (раз в сутки): Start Command `python -m services.backtester.main`  
   Cron: `0 12 * * *`
 
-Убедитесь, что collector запускается чаще, чем features/ml.
+### Ошибка ML: «only one class in data»
+
+Если в логах: `ValueError: This solver needs samples of at least 2 classes` — данные по рынку содержат только один класс (цены только растут или только падают). ML-модуль пропускает такие рынки. Нужно больше данных: warmup или PMXT.

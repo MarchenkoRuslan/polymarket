@@ -22,8 +22,8 @@ copy .env.example .env
 ```
 
 - **Swagger UI**: http://localhost:8000/docs  
-- **API**: `/api/v1/markets`, `/api/v1/trades`, `/api/v1/status`  
-- Collector запускается в фоне (при старте и каждые 15 мин)
+- **API**: `/api/v1/markets`, `/api/v1/trades`, `/api/v1/orderbook`, `/api/v1/signals`, `/api/v1/status`  
+- **Полный pipeline** в фоне: collector → features → ML (при старте и каждые 15 мин)
 
 ### Полный пайплайн (без web)
 
@@ -64,7 +64,7 @@ python -m services.collector.main
 
 | Сервис | Описание |
 |--------|----------|
-| **Web API** | FastAPI, Swagger UI, `/api/v1/markets`, `/api/v1/trades`, `/api/v1/status`. Collector в фоне |
+| **Web API** | FastAPI, Swagger UI. Эндпоинты: markets, trades, orderbook, signals, status. Полный pipeline (collect→features→ml) в фоне |
 | `collector` | Сбор данных Polymarket API (Gamma, CLOB) и PMXT Parquet |
 | `news_collector` | Сбор RSS-новостей с фильтрацией по ключевым словам |
 | `feature_store` | Фичи: MA, volatility, RSI, MACD, spread, volume |
@@ -100,7 +100,9 @@ python -m services.collector.main
 .\run.ps1 pmxt --start 2026-03-10 --hours 6
 ```
 
-Поддерживается почасовой формат архива. Если архив недоступен — используйте `.\run.ps1 collect` и `.\run.ps1 warmup`.
+- **Почасовой формат** (по умолчанию): `polymarket_{trades|orderbook}_{date}T{hour}.parquet`
+- **Легаси (дневной)**: `.\run.ps1 pmxt --legacy --days 7`
+- Параметры: `--start`, `--hours`, `--url`, `--legacy`, `--days`
 
 ## Конфигурация
 
@@ -119,8 +121,8 @@ python -m services.collector.main
 | `POLYMARKET_PASSPHRASE` | Пароль для API credentials |
 | `NEWS_KEYWORDS` | Ключевые слова для фильтрации новостей (через запятую) |
 | `RSS_FEEDS` | URL RSS-лент через запятую |
-| `COLLECT_INTERVAL_SEC` | Интервал сбора в фоне (по умолчанию 900 = 15 мин) |
-| `COLLECT_DEFER_SEC` | Задержка перед первым сбором (по умолчанию 5 с) |
+| `COLLECT_INTERVAL_SEC` | Интервал pipeline в фоне (по умолчанию 900 = 15 мин) |
+| `COLLECT_DEFER_SEC` | Задержка перед первым запуском pipeline (по умолчанию 5 с) |
 
 ## Тестирование
 
@@ -140,9 +142,9 @@ ruff check .
 
 См. [docs/RAILWAY.md](docs/RAILWAY.md):
 
-- FastAPI + Swagger, PostgreSQL, автосбор
-- **Быстрый билд**: Dockerfile + requirements-web.txt (без ML)
-- Cron для сбора, Features/ML, Backtest — при необходимости
+- FastAPI + Swagger, PostgreSQL
+- Полный pipeline (collector → features → ML) в фоне
+- Cron для сбора, Backtest — при необходимости
 
 ### Docker Compose
 
@@ -151,6 +153,15 @@ ruff check .
 3. Миграции: `docker compose run --rm collector alembic upgrade head`
 4. При необходимости — загрузка PMXT через `scripts/load_pmxt.py`
 5. Для реальной торговли: `POLYMARKET_DRY_RUN=false`, задать `POLYMARKET_PRIVATE_KEY`
+
+## Устранение неполадок
+
+| Проблема | Решение |
+|----------|---------|
+| Пустые `markets`, `trades` | Запустите `.\run.ps1 seed` или `.\run.ps1 pmxt --hours 6`, затем `.\run.ps1 warmup` для реальных данных |
+| Пустые `features`, `signals` | Pipeline идёт после collector. Проверьте `/api/v1/status`: `last_features_error`, `last_ml_error` |
+| ML: «only one class in data» | Недостаточно разнообразия цен. Добавьте данные (PMXT, warmup) |
+| `market_id` required | API не требует market_id в запросе — все query params опциональны |
 
 ## Риски
 

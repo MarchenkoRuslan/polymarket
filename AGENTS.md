@@ -10,8 +10,8 @@
 
 | Сервис | Путь | Задача |
 |--------|------|--------|
-| **Web API** | `api/` | FastAPI, Swagger UI (`/docs`), эндпоинты `/api/v1/markets`, `/api/v1/trades`, `/api/v1/status`. Lifespan: init_db + collector в фоне |
-| Web Server (legacy) | `server.py` | stdlib HTTP, `/`, `/health`, `/status`. Альтернатива без Swagger |
+| **Web API** | `api/` | FastAPI, Swagger UI (`/docs`). Эндпоинты: markets, trades, orderbook, signals, status. Lifespan: init_db + pipeline (collector→features→ml) в фоне |
+| Web Server | `server.py` | uvicorn + тот же FastAPI app. Pipeline в фоне. Для Railway/продакшена |
 | Data Collector | `services/collector/` | Polymarket API (Gamma, CLOB), PMXT Parquet → `markets`, `trades`, `orderbook` |
 | News Collector | `services/news_collector/` | RSS → фильтр по ключевым словам → таблица `news` |
 | Feature Store | `services/feature_store/` | MA, volatility, RSI, MACD, spread, volume → `features` |
@@ -45,10 +45,10 @@
 ## Запуск
 
 ```bash
-# Web API (FastAPI + Swagger, collector в фоне)
+# Web API (FastAPI + Swagger, полный pipeline в фоне)
 uvicorn api.app:app --reload --port 8000   # или .\run.ps1 server
 
-# Альтернатива (stdlib HTTP)
+# Альтернатива (тот же uvicorn, для продакшена)
 python server.py
 
 # Отдельные сервисы
@@ -58,12 +58,15 @@ python -m services.feature_store.main
 python -m services.ml_module.main
 python -m services.backtester.main
 python -m services.execution_bot.main
+
+# Features + ML без collector (для cron, если collector идёт отдельно)
+python scripts/run_pipeline.py
 ```
 
 ## Зависимости
 
-- **requirements-web.txt** — для Docker/Railway (web + collector). Без sklearn, xgboost, pyarrow, pytest. Быстрый билд.
-- **requirements.txt** — полный стек (ML, тесты). Локально и CI.
+- **requirements.txt** — полный стек (ML, тесты, collector, feature_store, ml_module). Локально и CI.
+- Pipeline (features + ml) требует sklearn; для Railway — полный requirements.txt (pipeline встроен в web).
 
 ## Тесты
 
@@ -85,4 +88,4 @@ ruff check .
 
 - **README.md** — быстрый старт, сервисы, конфигурация
 - **docs/ARCHITECTURE.md** — архитектура, таблицы, фичи, сигналы
-- **docs/RAILWAY.md** — деплой, 502, логи Alembic, пустые таблицы, requirements-web
+- **docs/RAILWAY.md** — деплой, pipeline, 502, логи Alembic, пустые таблицы, ML single-class

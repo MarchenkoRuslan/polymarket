@@ -33,7 +33,7 @@
                         └─────────────────────┘
 ```
 
-Web API (FastAPI, `/docs`) читает данные из БД и запускает collector в фоне при старте.
+Web API (FastAPI, `/docs`) читает данные из БД и запускает **полный pipeline** в фоне: collector → feature_store → ml_module.
 
 ### Эндпоинты API
 
@@ -41,9 +41,11 @@ Web API (FastAPI, `/docs`) читает данные из БД и запуска
 |------|----------|
 | `GET /docs` | Swagger UI |
 | `GET /api/v1/markets` | Список рынков (limit, offset) |
-| `GET /api/v1/markets/{id}` | Один рынок |
-| `GET /api/v1/trades` | Сделки (market_id, limit, offset) |
-| `GET /api/v1/status` | db_ok, markets, trades, last_collect_error |
+| `GET /api/v1/markets/{market_id}` | Один рынок |
+| `GET /api/v1/trades` | Сделки (market_id опционально, limit, offset) |
+| `GET /api/v1/orderbook` | Снимки стакана (market_id опционально, limit, offset) |
+| `GET /api/v1/signals` | ML-сигналы (market_id опционально, limit, offset) |
+| `GET /api/v1/status` | db_ok, counts (markets, trades, orderbook, features, signals), last_*_error |
 
 ## Таблицы БД
 
@@ -77,6 +79,7 @@ Web API (FastAPI, `/docs`) читает данные из БД и запуска
 
 - TimeSeriesSplit / walk-forward
 - Запрет утечки: train до t, test на t+1..t+k
+- Если в target только один класс (все цены идут вниз/вверх) — рынок пропускается: `single class in target, skipping`
 
 ## Execution Bot
 

@@ -10,14 +10,15 @@ alwaysApply: true
 
 ## Ключевое
 
-- **Web API**: `api/` (FastAPI), `server.py` (stdlib HTTP, legacy)
+- **Web API**: `api/` (FastAPI), `server.py` (uvicorn + pipeline)
 - **Точка входа**: `uvicorn api.app:app` или `python server.py`
+- **Pipeline**: collector → feature_store → ml_module (в фоне при старте)
 - **БД**: Alembic миграции в `db/migrations/`, `db/schema_sqlite.sql` для локального SQLite
-- **Зависимости**: `requirements-web.txt` для Docker (быстрый билд), `requirements.txt` — полный стек
+- **Зависимости**: `requirements.txt` (полный стек, ML для pipeline)
 - **Линтинг**: `ruff check .`
 
 ## Документация
 
 - README.md — быстрый старт, сервисы
 - docs/ARCHITECTURE.md — диаграмма, таблицы, API
-- docs/RAILWAY.md — деплой, 502, requirements-web
+- docs/RAILWAY.md — деплой, pipeline, устранение неполадок
