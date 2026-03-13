@@ -3,19 +3,24 @@ import logging
 import os
 import threading
 import time
-from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
+_migration_error = None
 _last_collect_error = None
 _last_features_error = None
 _last_ml_error = None
 _last_pipeline_error = None
+_skip_lifespan = False
 
-_TABLE_NAMES = ("markets", "trades", "orderbook", "features", "signals")
+_TABLE_NAMES = ("markets", "trades", "orderbook", "features", "signals", "news", "fee_rates", "orders", "results")
 
 
 def init_db():
-    """Run Alembic migrations on startup."""
+    """Run Alembic migrations on startup.
+
+    Sets _migration_error on failure so /health and /api/v1/status can report it.
+    """
+    global _migration_error
     try:
         from alembic.config import Config
         from alembic import command
@@ -27,8 +32,10 @@ def init_db():
         cfg = Config(ini_path)
         cfg.set_main_option("script_location", script_location)
         command.upgrade(cfg, "head")
+        _migration_error = None
         logger.info("DB migrations applied")
-    except Exception:
+    except Exception as e:
+        _migration_error = str(e)
         logger.exception("DB migrations failed")
 
 
@@ -115,6 +122,7 @@ def _get_status():
         "orderbook": 0,
         "features": 0,
         "signals": 0,
+        "migration_error": _migration_error,
         "last_collect_error": _last_collect_error,
         "last_features_error": _last_features_error,
         "last_ml_error": _last_ml_error,
@@ -126,10 +134,13 @@ def _get_status():
         s = SessionLocal()
         try:
             for table in _TABLE_NAMES:
-                out[table] = s.execute(
-                    text("SELECT COUNT(*) FROM " + table)
-                ).scalar() or 0
-            out["db_ok"] = True
+                try:
+                    out[table] = s.execute(
+                        text(f"SELECT COUNT(*) FROM {table}")
+                    ).scalar() or 0
+                except Exception:
+                    out[table] = -1
+            out["db_ok"] = _migration_error is None
         finally:
             s.close()
     except Exception as e:
@@ -138,6 +149,7 @@ def _get_status():
 
 
 def main():
+    global _skip_lifespan
     import sys
 
     # Ensure 'import server' in submodules returns this module, not a second copy.
@@ -150,16 +162,14 @@ def main():
     init_db()
     t = threading.Thread(target=pipeline_loop, daemon=True)
     t.start()
+
+    _skip_lifespan = True
+
     port = int(os.environ.get("PORT", 8000))
 
     import uvicorn
     from api.app import app
 
-    @asynccontextmanager
-    async def _noop_lifespan(_app):
-        yield
-
-    app.router.lifespan_context = _noop_lifespan  # type: ignore[assignment]
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
 

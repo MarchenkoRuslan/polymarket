@@ -1,7 +1,5 @@
 """Tests for FastAPI endpoints."""
-import os
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,10 +7,11 @@ from sqlalchemy import text
 
 
 @pytest.fixture
-def client(tmp_path):
+def client(tmp_path, monkeypatch):
     """Client with file-based SQLite so all connections share the same DB."""
     db_file = tmp_path / "test.db"
-    os.environ["DATABASE_URL"] = f"sqlite:///{db_file}"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_file}")
+    monkeypatch.setenv("DATABASE_SSLMODE", "disable")
 
     import importlib
     import config.settings
@@ -37,12 +36,10 @@ def client(tmp_path):
                 conn.execute(text(stmt))
         conn.commit()
 
-    def init_db_mock():
-        pass
+    server._skip_lifespan = True
 
-    with patch("api.app.init_db", side_effect=init_db_mock):
-        from api.app import app
-        return TestClient(app)
+    from api.app import app
+    return TestClient(app)
 
 
 def test_root_returns_ok(client):
@@ -106,13 +103,13 @@ def test_signals_returns_json(client):
 
 
 def test_status_returns_json(client):
-    """GET /api/v1/status returns JSON with db_ok, markets, trades, orderbook, features, signals."""
+    """GET /api/v1/status returns JSON with all table counts and error fields."""
     r = client.get("/api/v1/status")
     assert r.status_code == 200
     data = r.json()
-    assert "db_ok" in data
-    assert "markets" in data
-    assert "trades" in data
-    assert "orderbook" in data
-    assert "features" in data
-    assert "signals" in data
+    for field in ("db_ok", "markets", "trades", "orderbook", "features",
+                  "signals", "news", "fee_rates", "orders", "results"):
+        assert field in data, f"Missing field: {field}"
+    for table in ("markets", "trades", "orderbook", "features", "signals",
+                  "news", "fee_rates", "orders", "results"):
+        assert isinstance(data[table], int), f"{table} should be int"

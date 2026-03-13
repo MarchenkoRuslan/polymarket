@@ -86,6 +86,20 @@ def insert_trade(
     )
 
 
+def upsert_fee_rate(session: Session, token_id: str, fee_bps: int) -> None:
+    """Insert or update fee rate for a token."""
+    session.execute(
+        text("""
+            INSERT INTO fee_rates (token_id, base_fee_bps, updated_at)
+            VALUES (:token_id, :fee_bps, CURRENT_TIMESTAMP)
+            ON CONFLICT (token_id) DO UPDATE SET
+                base_fee_bps = EXCLUDED.base_fee_bps,
+                updated_at = CURRENT_TIMESTAMP
+        """),
+        {"token_id": token_id, "fee_bps": fee_bps},
+    )
+
+
 def markets_from_events(events: list[dict]) -> list[dict]:
     """Extract markets from events (nested structure). No mutation of input."""
     markets = []

@@ -46,7 +46,7 @@ def test_pipeline_features_to_ml(db_session):
     """Insert trades + features -> ML produces signals."""
     from services.collector.db_writer import insert_trade, upsert_market
     from services.feature_store.features import compute_all
-    from services.ml_module.models import FEATURE_COLS, prepare_xy, train_baseline, walk_forward_validate
+    from services.ml_module.models import FEATURE_COLS, prepare_xy, impute_features, train_baseline, walk_forward_validate
 
     upsert_market(db_session, {"id": "m2", "question": "Q2", "event_id": "e1", "outcome_settled": False})
     base = datetime(2025, 1, 1, 12, 0, 0)
@@ -66,7 +66,8 @@ def test_pipeline_features_to_ml(db_session):
     X, y = prepare_xy(df, "target")
     metrics = walk_forward_validate(X, y, n_splits=3)
     assert "roc_auc" in metrics
-    model = train_baseline(X, y)
+    X_imputed, _ = impute_features(X)
+    model = train_baseline(X_imputed, y)
     assert model is not None
 
 
@@ -143,3 +144,42 @@ def test_db_writer_insert_orderbook(db_session):
     r = db_session.execute(text("SELECT bid_price, ask_price FROM orderbook WHERE market_id = 'm5'")).fetchone()
     assert r[0] == 0.45
     assert r[1] == 0.55
+
+
+def test_db_writer_upsert_fee_rate(db_session):
+    """upsert_fee_rate inserts and updates fee rates."""
+    from services.collector.db_writer import upsert_fee_rate
+
+    upsert_fee_rate(db_session, "token_abc", 30)
+    db_session.commit()
+    r = db_session.execute(
+        text("SELECT token_id, base_fee_bps FROM fee_rates WHERE token_id = 'token_abc'")
+    ).fetchone()
+    assert r[0] == "token_abc"
+    assert r[1] == 30
+
+    upsert_fee_rate(db_session, "token_abc", 50)
+    db_session.commit()
+    r = db_session.execute(
+        text("SELECT base_fee_bps FROM fee_rates WHERE token_id = 'token_abc'")
+    ).fetchone()
+    assert r[0] == 50
+
+
+def test_db_writer_upsert_fee_rate_multiple_tokens(db_session):
+    """upsert_fee_rate handles multiple tokens independently."""
+    from services.collector.db_writer import upsert_fee_rate
+
+    upsert_fee_rate(db_session, "token_1", 20)
+    upsert_fee_rate(db_session, "token_2", 40)
+    db_session.commit()
+    count = db_session.execute(text("SELECT COUNT(*) FROM fee_rates")).scalar()
+    assert count == 2
+    r1 = db_session.execute(
+        text("SELECT base_fee_bps FROM fee_rates WHERE token_id = 'token_1'")
+    ).fetchone()
+    r2 = db_session.execute(
+        text("SELECT base_fee_bps FROM fee_rates WHERE token_id = 'token_2'")
+    ).fetchone()
+    assert r1[0] == 20
+    assert r2[0] == 40

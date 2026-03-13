@@ -1,10 +1,12 @@
 """Tests for collector."""
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from services.collector.db_writer import markets_from_events
 from services.collector.main import (
+    _collect_orderbook,
     _extract_market_id,
     _parse_clob_token_ids,
     _parse_outcome_prices,
@@ -171,3 +173,246 @@ async def test_get_prices_history_empty_history():
     with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_resp):
         result = await client.get_prices_history("token123")
     assert result == []
+
+
+# -- PolymarketClient.get_orderbook tests --
+
+
+@pytest.mark.asyncio
+async def test_get_orderbook_returns_book():
+    """get_orderbook returns parsed JSON from CLOB /book."""
+    client = PolymarketClient("https://gamma.test", "https://clob.test", rate_limit_delay=0)
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "bids": [{"price": "0.45", "size": "100"}],
+        "asks": [{"price": "0.55", "size": "200"}],
+    }
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_resp):
+        result = await client.get_orderbook("token123")
+    assert result is not None
+    assert "bids" in result
+    assert "asks" in result
+    assert result["bids"][0]["price"] == "0.45"
+
+
+@pytest.mark.asyncio
+async def test_get_orderbook_returns_none_on_404():
+    """get_orderbook returns None when token not found."""
+    client = PolymarketClient("https://gamma.test", "https://clob.test", rate_limit_delay=0)
+    mock_resp = MagicMock()
+    mock_resp.status_code = 404
+
+    with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_resp):
+        result = await client.get_orderbook("unknown_token")
+    assert result is None
+
+
+# -- _collect_orderbook tests --
+
+
+@pytest.mark.asyncio
+async def test_collect_orderbook_clob_primary():
+    """_collect_orderbook uses CLOB data when available."""
+    client = PolymarketClient("https://gamma.test", "https://clob.test", rate_limit_delay=0)
+
+    clob_book = {
+        "bids": [{"price": "0.42", "size": "150"}],
+        "asks": [{"price": "0.58", "size": "250"}],
+    }
+    with patch.object(client, "get_orderbook", new_callable=AsyncMock, return_value=clob_book):
+        session = MagicMock()
+        market = {"bestBid": "0.40", "bestAsk": "0.60"}
+        now = datetime(2025, 3, 1, tzinfo=timezone.utc)
+        result = await _collect_orderbook(client, session, market, "m1", "token1", now)
+
+    assert result is True
+    session.execute.assert_called_once()
+    call_params = session.execute.call_args
+    params = call_params[1] if call_params[1] else call_params[0][1]
+    assert params["bid_price"] == 0.42
+    assert params["ask_price"] == 0.58
+    assert params["bid_qty"] == 150.0
+    assert params["ask_qty"] == 250.0
+
+
+@pytest.mark.asyncio
+async def test_collect_orderbook_gamma_fallback():
+    """_collect_orderbook falls back to Gamma bestBid/bestAsk when CLOB fails."""
+    client = PolymarketClient("https://gamma.test", "https://clob.test", rate_limit_delay=0)
+
+    with patch.object(client, "get_orderbook", new_callable=AsyncMock, side_effect=Exception("CLOB down")):
+        session = MagicMock()
+        market = {"bestBid": "0.40", "bestAsk": "0.60"}
+        now = datetime(2025, 3, 1, tzinfo=timezone.utc)
+        result = await _collect_orderbook(client, session, market, "m1", "token1", now)
+
+    assert result is True
+    session.execute.assert_called_once()
+    call_params = session.execute.call_args
+    params = call_params[1] if call_params[1] else call_params[0][1]
+    assert params["bid_price"] == 0.40
+    assert params["ask_price"] == 0.60
+
+
+@pytest.mark.asyncio
+async def test_collect_orderbook_gamma_fallback_on_empty_clob():
+    """_collect_orderbook falls back to Gamma when CLOB returns empty bids/asks."""
+    client = PolymarketClient("https://gamma.test", "https://clob.test", rate_limit_delay=0)
+    empty_book = {"bids": [], "asks": []}
+
+    with patch.object(client, "get_orderbook", new_callable=AsyncMock, return_value=empty_book):
+        session = MagicMock()
+        market = {"bestBid": "0.35", "bestAsk": "0.65"}
+        now = datetime(2025, 3, 1, tzinfo=timezone.utc)
+        result = await _collect_orderbook(client, session, market, "m1", "token1", now)
+
+    assert result is True
+    session.execute.assert_called_once()
+    call_params = session.execute.call_args
+    params = call_params[1] if call_params[1] else call_params[0][1]
+    assert params["bid_price"] == 0.35
+    assert params["ask_price"] == 0.65
+
+
+@pytest.mark.asyncio
+async def test_collect_orderbook_no_data_anywhere():
+    """_collect_orderbook returns False when neither CLOB nor Gamma have data."""
+    client = PolymarketClient("https://gamma.test", "https://clob.test", rate_limit_delay=0)
+
+    with patch.object(client, "get_orderbook", new_callable=AsyncMock, return_value=None):
+        session = MagicMock()
+        market = {}
+        now = datetime(2025, 3, 1, tzinfo=timezone.utc)
+        result = await _collect_orderbook(client, session, market, "m1", "token1", now)
+
+    assert result is False
+    session.execute.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_collect_orderbook_invalid_gamma_prices():
+    """_collect_orderbook returns False when Gamma prices are out of range."""
+    client = PolymarketClient("https://gamma.test", "https://clob.test", rate_limit_delay=0)
+
+    with patch.object(client, "get_orderbook", new_callable=AsyncMock, return_value=None):
+        session = MagicMock()
+        market = {"bestBid": "0.0", "bestAsk": "1.0"}
+        now = datetime(2025, 3, 1, tzinfo=timezone.utc)
+        result = await _collect_orderbook(client, session, market, "m1", "token1", now)
+
+    assert result is False
+    session.execute.assert_not_called()
+
+
+# -- collect_from_api flow and COLLECT_MARKETS_LIMIT tests --
+
+
+@pytest.mark.asyncio
+async def test_collect_from_api_processes_all_markets_by_default():
+    """collect_from_api processes all markets when COLLECT_MARKETS_LIMIT=0."""
+    from services.collector.main import collect_from_api
+
+    events = [
+        {
+            "id": "e1",
+            "markets": [
+                {"id": f"m{i}", "question": f"Q{i}", "clobTokenIds": [f"tok{i}"]}
+                for i in range(5)
+            ],
+        }
+    ]
+
+    mock_client = AsyncMock()
+    mock_client.get_events_paginated = AsyncMock(return_value=events)
+    mock_client.get_prices_history = AsyncMock(return_value=[])
+    mock_client.get_orderbook = AsyncMock(return_value=None)
+    mock_client.close = AsyncMock()
+
+    mock_session = MagicMock()
+    mock_session.execute = MagicMock()
+    mock_session.commit = MagicMock()
+
+    with (
+        patch("services.collector.main.PolymarketClient", return_value=mock_client),
+        patch("services.collector.main.SessionLocal", return_value=mock_session),
+        patch("services.collector.main.COLLECT_MARKETS_LIMIT", 0),
+    ):
+        await collect_from_api()
+
+    assert mock_client.get_orderbook.call_count == 5
+
+
+@pytest.mark.asyncio
+async def test_collect_from_api_respects_markets_limit():
+    """collect_from_api only processes COLLECT_MARKETS_LIMIT markets when set."""
+    from services.collector.main import collect_from_api
+
+    events = [
+        {
+            "id": "e1",
+            "markets": [
+                {"id": f"m{i}", "question": f"Q{i}", "clobTokenIds": [f"tok{i}"]}
+                for i in range(10)
+            ],
+        }
+    ]
+
+    mock_client = AsyncMock()
+    mock_client.get_events_paginated = AsyncMock(return_value=events)
+    mock_client.get_prices_history = AsyncMock(return_value=[])
+    mock_client.get_orderbook = AsyncMock(return_value=None)
+    mock_client.close = AsyncMock()
+
+    mock_session = MagicMock()
+    mock_session.execute = MagicMock()
+    mock_session.commit = MagicMock()
+
+    with (
+        patch("services.collector.main.PolymarketClient", return_value=mock_client),
+        patch("services.collector.main.SessionLocal", return_value=mock_session),
+        patch("services.collector.main.COLLECT_MARKETS_LIMIT", 3),
+    ):
+        await collect_from_api()
+
+    assert mock_client.get_orderbook.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_collect_from_api_inserts_fee_rates():
+    """collect_from_api calls upsert_fee_rate for each processed market."""
+    from services.collector.main import collect_from_api
+
+    events = [
+        {
+            "id": "e1",
+            "markets": [
+                {"id": "m1", "question": "Q1", "clobTokenIds": ["tok1"]},
+                {"id": "m2", "question": "Q2", "clobTokenIds": ["tok2"]},
+            ],
+        }
+    ]
+
+    mock_client = AsyncMock()
+    mock_client.get_events_paginated = AsyncMock(return_value=events)
+    mock_client.get_prices_history = AsyncMock(return_value=[])
+    mock_client.get_orderbook = AsyncMock(return_value=None)
+    mock_client.close = AsyncMock()
+
+    mock_session = MagicMock()
+    mock_session.execute = MagicMock()
+    mock_session.commit = MagicMock()
+
+    with (
+        patch("services.collector.main.PolymarketClient", return_value=mock_client),
+        patch("services.collector.main.SessionLocal", return_value=mock_session),
+        patch("services.collector.main.COLLECT_MARKETS_LIMIT", 0),
+        patch("services.collector.main.upsert_fee_rate") as mock_fee,
+    ):
+        await collect_from_api()
+
+    assert mock_fee.call_count == 2
+    mock_fee.assert_any_call(mock_session, "tok1", 30)
+    mock_fee.assert_any_call(mock_session, "tok2", 30)

@@ -23,14 +23,30 @@ FEATURE_COLS = [
 
 
 def prepare_xy(df: pd.DataFrame, target_col: str = "target") -> tuple[pd.DataFrame, pd.Series]:
-    """Prepare X (features) and y (target). Target = 1 if price goes up."""
+    """Select feature columns and target. No imputation — use impute_features() separately."""
     available = [c for c in FEATURE_COLS if c in df.columns]
     X = df[available].copy()
-    for col in X.columns:
-        median_val = X[col].median()
-        X[col] = X[col].fillna(median_val if pd.notna(median_val) else 0)
     y = df[target_col]
     return X, y
+
+
+def impute_features(
+    X: pd.DataFrame,
+    medians: pd.Series | None = None,
+) -> tuple[pd.DataFrame, pd.Series]:
+    """Fill NaN using provided medians (from training set).
+
+    If *medians* is None, computes medians from *X* itself (use only
+    when there is no train/test distinction, e.g. final model fit).
+    Returns (imputed X copy, medians used).
+    """
+    X = X.copy()
+    if medians is None:
+        medians = X.median()
+    for col in X.columns:
+        fill = medians.get(col, 0)
+        X[col] = X[col].fillna(fill if pd.notna(fill) else 0)
+    return X, medians
 
 
 class _ConstantClassifier:
@@ -55,6 +71,8 @@ def train_baseline(
     model_type: str = "logistic",
 ) -> Any:
     """Train baseline model (LR or RF). Falls back to constant if single class."""
+    if len(y_train) == 0:
+        return _ConstantClassifier(0)
     unique_classes = np.unique(y_train)
     if len(unique_classes) < 2:
         return _ConstantClassifier(int(unique_classes[0]))
@@ -84,12 +102,14 @@ def walk_forward_validate(
     n_splits: int = 5,
     model_type: str = "logistic",
 ) -> dict[str, float]:
-    """Time-series walk-forward validation."""
+    """Time-series walk-forward validation with per-fold imputation."""
     tscv = TimeSeriesSplit(n_splits=n_splits)
     aucs, precisions, recalls = [], [], []
     for train_idx, test_idx in tscv.split(X):
-        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        X_train_raw, X_test_raw = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+        X_train, train_medians = impute_features(X_train_raw)
+        X_test, _ = impute_features(X_test_raw, medians=train_medians)
         model = train_baseline(X_train, y_train, model_type)
         proba = model.predict_proba(X_test)[:, 1]
         pred = (proba >= 0.5).astype(int)
