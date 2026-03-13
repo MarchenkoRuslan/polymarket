@@ -83,6 +83,7 @@ class StatusOut(BaseModel):
     orderbook: int = 0
     features: int = 0
     signals: int = 0
+    migration_error: str | None = None
     last_collect_error: str | None = None
     last_features_error: str | None = None
     last_ml_error: str | None = None

@@ -1,5 +1,6 @@
 from config.settings import (
     DATABASE_URL,
+    DATABASE_SSLMODE,
     POLYMARKET_CLOB_API,
     POLYMARKET_GAMMA_API,
     PMXT_ARCHIVE_URL,
@@ -9,6 +10,7 @@ from config.settings import (
 
 __all__ = [
     "DATABASE_URL",
+    "DATABASE_SSLMODE",
     "POLYMARKET_CLOB_API",
     "POLYMARKET_GAMMA_API",
     "PMXT_ARCHIVE_URL",

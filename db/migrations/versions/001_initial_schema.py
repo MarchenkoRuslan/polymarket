@@ -6,7 +6,6 @@ Create Date: 2025-03-12
 
 """
 from alembic import op
-import sqlalchemy as sa
 
 revision = "001"
 down_revision = None

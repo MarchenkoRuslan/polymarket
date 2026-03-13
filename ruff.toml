@@ -1,3 +1,0 @@
-target-version = "py311"
-line-length = 100
-exclude = ["migrations", ".git", "__pycache__"]
