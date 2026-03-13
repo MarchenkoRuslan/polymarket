@@ -6,13 +6,21 @@ import pandas as pd
 
 @dataclass
 class BacktestConfig:
-    """Backtest configuration."""
+    """Backtest configuration.
+
+    sharpe_annualization: factor to annualize Sharpe ratio.
+      sqrt(252)          ~15.87  for daily data
+      sqrt(252*24)       ~77.77  for hourly data
+      sqrt(252*24*60)   ~602.4   for minute data
+      1.0                        for no annualization (raw ratio)
+    Default assumes ~hourly data points from Polymarket price history.
+    Override via env SHARPE_ANNUALIZATION or constructor.
+    """
     initial_capital: float = 10000.0
     fee_bps: int = 30
     slippage_bps: int = 10
-    position_pct: float = 0.10  # fraction of capital per trade (default 10%)
-    # Sharpe annualization: sqrt(252) for daily, sqrt(252*24*60) for minute
-    sharpe_annualization: float = 252**0.5
+    position_pct: float = 0.10
+    sharpe_annualization: float = (252 * 24) ** 0.5
 
 
 @dataclass

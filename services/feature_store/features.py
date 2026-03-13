@@ -81,17 +81,14 @@ def compute_all(
 
 
 def to_feature_rows(df: pd.DataFrame, market_id: str) -> list[dict]:
-    """Convert DataFrame with feature columns to list of (market_id, ts, feature_name, value)."""
-    rows = []
+    """Convert DataFrame with feature columns to list of (market_id, ts, feature_name, value).
+
+    Uses melt+dropna for vectorized performance instead of iterrows.
+    """
     feature_cols = [c for c in df.columns if c not in ("ts", "market_id", "price", "size", "side")]
-    for _, row in df.iterrows():
-        ts = row.get("ts")
-        for col in feature_cols:
-            if col in row and pd.notna(row[col]):
-                rows.append({
-                    "market_id": market_id,
-                    "ts": ts,
-                    "feature_name": col,
-                    "feature_value": float(row[col]),
-                })
-    return rows
+    if not feature_cols:
+        return []
+    melted = df[["ts"] + feature_cols].melt(id_vars=["ts"], var_name="feature_name", value_name="feature_value")
+    melted = melted.dropna(subset=["feature_value"])
+    melted["market_id"] = market_id
+    return melted[["market_id", "ts", "feature_name", "feature_value"]].to_dict("records")
