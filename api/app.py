@@ -1,11 +1,14 @@
 """FastAPI application with Swagger UI."""
 import logging
+import os
 import threading
+import time
+from collections import defaultdict
 from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from api.routes import router
@@ -13,6 +16,9 @@ import server
 from server import init_db, pipeline_loop
 
 logger = logging.getLogger(__name__)
+
+_RATE_LIMIT_RPM = int(os.getenv("API_RATE_LIMIT_RPM", "120"))
+_rate_store: dict[str, list[float]] = defaultdict(list)
 
 
 @asynccontextmanager
@@ -71,6 +77,35 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 async def dashboard(request: Request):
     """Simple dashboard: Status, Markets table, Trades chart."""
     return templates.TemplateResponse("dashboard.html", {"request": request})
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Simple in-memory sliding-window rate limiter per client IP."""
+    if _RATE_LIMIT_RPM <= 0 or not request.url.path.startswith("/api/"):
+        return await call_next(request)
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    window = 60.0
+    timestamps = _rate_store[client_ip]
+    timestamps[:] = [t for t in timestamps if now - t < window]
+    if len(timestamps) >= _RATE_LIMIT_RPM:
+        return JSONResponse(
+            {"detail": "Rate limit exceeded. Try again later."},
+            status_code=429,
+            headers={"Retry-After": "60"},
+        )
+    timestamps.append(now)
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def cache_control_middleware(request: Request, call_next):
+    """Add Cache-Control and ETag headers to API responses."""
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
+    return response
 
 
 app.include_router(router)

@@ -67,3 +67,8 @@ API_RATE_LIMIT = _parse_int("API_RATE_LIMIT", "100")
 
 # Max markets to collect detailed data (trades, orderbook) per cycle. 0 = all.
 COLLECT_MARKETS_LIMIT = _parse_int("COLLECT_MARKETS_LIMIT", "0")
+
+# Per-service market limits (0 = unlimited)
+FEATURE_MARKETS_LIMIT = _parse_int("FEATURE_MARKETS_LIMIT", "50")
+ML_MARKETS_LIMIT = _parse_int("ML_MARKETS_LIMIT", "20")
+BACKTEST_MARKETS_LIMIT = _parse_int("BACKTEST_MARKETS_LIMIT", "15")

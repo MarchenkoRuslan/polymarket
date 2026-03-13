@@ -1,5 +1,6 @@
 """ML Module - train models and produce signals."""
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -20,6 +21,9 @@ from services.feature_store.features import compute_all
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+ML_MARKETS_LIMIT = int(os.getenv("ML_MARKETS_LIMIT", "20"))
+_INSERT_BATCH_SIZE = 500
 
 
 def load_trades_with_target(session, market_id: str, limit: int = 5000) -> pd.DataFrame:
@@ -52,7 +56,7 @@ def run():
 
         pending_signals: list[dict] = []
 
-        for mid in markets[:20]:
+        for mid in markets[:ML_MARKETS_LIMIT]:
             try:
                 df = load_trades_with_target(session, mid)
                 if df.empty or len(df) < 10:
@@ -88,14 +92,17 @@ def run():
             except Exception as e:
                 logger.warning("Market %s: ML failed: %s", mid[:16], e)
 
-        session.execute(text("DELETE FROM signals"))
-        for sig in pending_signals:
+        updated_markets = list({s["m"] for s in pending_signals})
+        for mid in updated_markets:
             session.execute(
-                text("INSERT INTO signals (ts, market_id, prediction) VALUES (:ts, :m, :p)"),
-                sig,
+                text("DELETE FROM signals WHERE market_id = :m"),
+                {"m": mid},
             )
+        stmt = text("INSERT INTO signals (ts, market_id, prediction) VALUES (:ts, :m, :p)")
+        for i in range(0, len(pending_signals), _INSERT_BATCH_SIZE):
+            session.execute(stmt, pending_signals[i : i + _INSERT_BATCH_SIZE])
         session.commit()
-        logger.info("Signals replaced atomically: %d new signals", len(pending_signals))
+        logger.info("Signals updated for %d markets: %d new signals", len(updated_markets), len(pending_signals))
     except Exception as e:
         session.rollback()
         logger.exception("%s", e)

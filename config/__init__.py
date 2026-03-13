@@ -7,6 +7,9 @@ from config.settings import (
     DEFAULT_FEE_BPS,
     API_RATE_LIMIT,
     COLLECT_MARKETS_LIMIT,
+    FEATURE_MARKETS_LIMIT,
+    ML_MARKETS_LIMIT,
+    BACKTEST_MARKETS_LIMIT,
 )
 
 __all__ = [
@@ -18,4 +21,7 @@ __all__ = [
     "DEFAULT_FEE_BPS",
     "API_RATE_LIMIT",
     "COLLECT_MARKETS_LIMIT",
+    "FEATURE_MARKETS_LIMIT",
+    "ML_MARKETS_LIMIT",
+    "BACKTEST_MARKETS_LIMIT",
 ]

@@ -22,13 +22,15 @@ def upsert_market(session: Session, market: dict) -> None:
             end_date = None
     outcome_settled = market.get("resolved", False) or market.get("outcome_settled", False)
     event = market.get("eventId") or market.get("event_id") or ""
+    slug = market.get("event_slug") or market.get("slug") or ""
 
     session.execute(
         text("""
-            INSERT INTO markets (market_id, event, question, end_date, outcome_settled)
-            VALUES (:market_id, :event, :question, :end_date, :outcome_settled)
+            INSERT INTO markets (market_id, event, question, slug, end_date, outcome_settled)
+            VALUES (:market_id, :event, :question, :slug, :end_date, :outcome_settled)
             ON CONFLICT (market_id) DO UPDATE SET
                 question = EXCLUDED.question,
+                slug = COALESCE(NULLIF(EXCLUDED.slug, ''), markets.slug),
                 end_date = EXCLUDED.end_date,
                 outcome_settled = EXCLUDED.outcome_settled
         """),
@@ -36,6 +38,7 @@ def upsert_market(session: Session, market: dict) -> None:
             "market_id": market_id,
             "event": event,
             "question": question,
+            "slug": slug,
             "end_date": end_date,
             "outcome_settled": outcome_settled,
         },
@@ -108,6 +111,7 @@ def markets_from_events(events: list[dict]) -> list[dict]:
         if isinstance(ev_markets, dict):
             ev_markets = [ev_markets]
         event_id = ev.get("id") or ev.get("slug", "")
+        event_slug = ev.get("slug") or ""
         for m in ev_markets:
-            markets.append({**m, "event_id": event_id})
+            markets.append({**m, "event_id": event_id, "event_slug": event_slug})
     return markets

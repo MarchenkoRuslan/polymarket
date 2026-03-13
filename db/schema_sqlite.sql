@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS markets (
     market_id TEXT PRIMARY KEY,
     event TEXT,
     question TEXT,
+    slug TEXT,
     end_date TEXT,
     outcome_settled INTEGER,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP

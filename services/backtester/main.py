@@ -1,5 +1,6 @@
 """Backtester - simulates trading on historical data."""
 import logging
+import os
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -21,6 +22,8 @@ from config import DEFAULT_FEE_BPS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+BACKTEST_MARKETS_LIMIT = int(os.getenv("BACKTEST_MARKETS_LIMIT", "15"))
 
 
 def load_signals_df(session, market_id: str, limit: int = 5000) -> pd.DataFrame:
@@ -89,8 +92,9 @@ def main():
         if not markets:
             result = session.execute(text("SELECT DISTINCT market_id FROM trades"))
             markets = [r[0] for r in result.fetchall()]
-        markets = markets[:15]
-        config = BacktestConfig(fee_bps=DEFAULT_FEE_BPS)
+        markets = markets[:BACKTEST_MARKETS_LIMIT]
+        sharpe_ann = float(os.getenv("SHARPE_ANNUALIZATION", str((252 * 24) ** 0.5)))
+        config = BacktestConfig(fee_bps=DEFAULT_FEE_BPS, sharpe_annualization=sharpe_ann)
 
         for mid in markets:
             df = load_market_data(session, mid)

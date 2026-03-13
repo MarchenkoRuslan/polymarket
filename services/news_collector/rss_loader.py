@@ -20,10 +20,17 @@ def fetch_rss(url: str) -> list[dict]:
         logger.warning("feedparser not installed, skipping RSS")
         return []
     try:
-        with httpx.Client() as client:
-            resp = client.get(url, timeout=15)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; PolymarketBot/1.0)",
+            "Accept": "application/rss+xml, application/xml, text/xml, */*",
+        }
+        with httpx.Client(follow_redirects=True) as client:
+            resp = client.get(url, timeout=20, headers=headers)
             resp.raise_for_status()
         feed = feedparser.parse(resp.content)
+        if not feed.entries:
+            logger.info("RSS %s: no entries found (feed status: %s)", url, getattr(feed, 'status', 'n/a'))
+            return []
         items = []
         for entry in feed.entries[:50]:
             published = None
@@ -41,6 +48,7 @@ def fetch_rss(url: str) -> list[dict]:
                 "published": published,
                 "summary": getattr(entry, "summary", "")[:500],
             })
+        logger.info("RSS %s: fetched %d entries", url, len(items))
         return items
     except Exception as e:
         logger.warning("RSS fetch %s: %s", url, e)

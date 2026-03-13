@@ -73,17 +73,37 @@ def load_pmxt_parquet_hourly(
 
 
 def _parse_ts(raw_ts):
-    """Parse timestamp from various PMXT formats into timezone-aware datetime."""
+    """Parse timestamp from various PMXT formats into timezone-aware datetime.
+
+    Returns None for unparseable values.
+    """
+    if raw_ts is None:
+        return None
     if hasattr(raw_ts, "to_pydatetime"):
         dt = raw_ts.to_pydatetime()
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt
     if isinstance(raw_ts, (int, float)):
+        import math
+        if math.isnan(raw_ts):
+            return None
         if raw_ts > 1e12:
             raw_ts = raw_ts / 1000
         return datetime.fromtimestamp(raw_ts, tz=timezone.utc)
-    return raw_ts
+    if isinstance(raw_ts, str):
+        try:
+            dt = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except (ValueError, TypeError):
+            return None
+    if isinstance(raw_ts, datetime):
+        if raw_ts.tzinfo is None:
+            raw_ts = raw_ts.replace(tzinfo=timezone.utc)
+        return raw_ts
+    return None
 
 
 def _get_ts_field(row):
@@ -108,16 +128,35 @@ def trades_to_rows(df: pd.DataFrame, market_id_col: str = "market") -> list[dict
     """Convert PMXT trades DataFrame to list of dicts for DB insert."""
     if df is None or df.empty:
         return []
+
+    col_map = {c: i for i, c in enumerate(df.columns)}
+    ts_keys = ("timestamp", "ts", "t", "time")
+    mid_keys = (market_id_col, "market_id", "condition_id", "market", "conditionId")
+
     rows = []
-    for _, row in df.iterrows():
-        raw_ts = _get_ts_field(row)
+    for tup in df.itertuples(index=False):
+        raw_ts = next((tup[col_map[k]] for k in ts_keys if k in col_map and tup[col_map[k]] is not None), None)
         ts = _parse_ts(raw_ts)
-        market_id = _get_market_id(row, market_id_col)
+        if ts is None:
+            continue
+        market_id = ""
+        for k in mid_keys:
+            if k in col_map:
+                v = tup[col_map[k]]
+                if v is not None and str(v).strip():
+                    market_id = str(v)
+                    break
         if not market_id:
             continue
-        price = float(row.get("price", row.get("outcome_price", 0)))
-        size = float(row.get("size", row.get("volume", 0)))
-        side = str(row.get("side", "buy"))[:4]
+        try:
+            price = float(tup[col_map["price"]] if "price" in col_map else (tup[col_map["outcome_price"]] if "outcome_price" in col_map else 0))
+            size = float(tup[col_map["size"]] if "size" in col_map else (tup[col_map["volume"]] if "volume" in col_map else 0))
+        except (TypeError, ValueError):
+            continue
+        if price != price or size != size:
+            continue
+        side_val = tup[col_map["side"]] if "side" in col_map else "buy"
+        side = str(side_val)[:4] if side_val else "buy"
         rows.append({"ts": ts, "market_id": market_id, "price": price, "size": size, "side": side})
     return rows
 
@@ -128,17 +167,38 @@ def orderbook_to_rows(
     """Convert PMXT orderbook DataFrame to list of dicts for DB insert."""
     if df is None or df.empty:
         return []
+    col_map = {c: i for i, c in enumerate(df.columns)}
+    ts_keys = ("timestamp", "ts", "t", "time")
+    mid_keys = (market_id_col, "market_id", "condition_id", "market", "conditionId")
+
+    def _col(tup, *keys, default=0):
+        for k in keys:
+            if k in col_map and tup[col_map[k]] is not None:
+                return tup[col_map[k]]
+        return default
+
     rows = []
-    for _, row in df.iterrows():
-        raw_ts = _get_ts_field(row)
+    for tup in df.itertuples(index=False):
+        raw_ts = next((tup[col_map[k]] for k in ts_keys if k in col_map and tup[col_map[k]] is not None), None)
         ts = _parse_ts(raw_ts)
-        market_id = _get_market_id(row, market_id_col)
+        if ts is None:
+            continue
+        market_id = ""
+        for k in mid_keys:
+            if k in col_map:
+                v = tup[col_map[k]]
+                if v is not None and str(v).strip():
+                    market_id = str(v)
+                    break
         if not market_id:
             continue
-        bid_price = float(row.get("bid_price", row.get("best_bid", row.get("bid", 0))))
-        bid_qty = float(row.get("bid_qty", row.get("bid_size", 0)))
-        ask_price = float(row.get("ask_price", row.get("best_ask", row.get("ask", 0))))
-        ask_qty = float(row.get("ask_qty", row.get("ask_size", 0)))
+        try:
+            bid_price = float(_col(tup, "bid_price", "best_bid", "bid"))
+            bid_qty = float(_col(tup, "bid_qty", "bid_size"))
+            ask_price = float(_col(tup, "ask_price", "best_ask", "ask"))
+            ask_qty = float(_col(tup, "ask_qty", "ask_size"))
+        except (TypeError, ValueError):
+            continue
         rows.append({
             "ts": ts, "market_id": market_id,
             "bid_price": bid_price, "bid_qty": bid_qty,
@@ -151,15 +211,36 @@ def orderbook_to_trade_rows(df: pd.DataFrame, market_id_col: str = "market") -> 
     """Create synthetic trade rows from orderbook (mid-price) for pipelines that need trades."""
     if df is None or df.empty:
         return []
+    col_map = {c: i for i, c in enumerate(df.columns)}
+    ts_keys = ("timestamp", "ts", "t", "time")
+    mid_keys = (market_id_col, "market_id", "condition_id", "market", "conditionId")
+
+    def _col(tup, *keys, default=0):
+        for k in keys:
+            if k in col_map and tup[col_map[k]] is not None:
+                return tup[col_map[k]]
+        return default
+
     rows = []
-    for _, row in df.iterrows():
-        raw_ts = _get_ts_field(row)
+    for tup in df.itertuples(index=False):
+        raw_ts = next((tup[col_map[k]] for k in ts_keys if k in col_map and tup[col_map[k]] is not None), None)
         ts = _parse_ts(raw_ts)
-        market_id = _get_market_id(row, market_id_col)
+        if ts is None:
+            continue
+        market_id = ""
+        for k in mid_keys:
+            if k in col_map:
+                v = tup[col_map[k]]
+                if v is not None and str(v).strip():
+                    market_id = str(v)
+                    break
         if not market_id:
             continue
-        bid = float(row.get("bid_price", row.get("best_bid", row.get("bid", 0))))
-        ask = float(row.get("ask_price", row.get("best_ask", row.get("ask", 0))))
+        try:
+            bid = float(_col(tup, "bid_price", "best_bid", "bid"))
+            ask = float(_col(tup, "ask_price", "best_ask", "ask"))
+        except (TypeError, ValueError):
+            continue
         mid = (bid + ask) / 2 if (bid and ask) else bid or ask
         if mid <= 0 or mid >= 1:
             continue

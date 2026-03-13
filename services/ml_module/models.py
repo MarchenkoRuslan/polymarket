@@ -45,7 +45,9 @@ def impute_features(
         medians = X.median()
     for col in X.columns:
         fill = medians.get(col, 0)
-        X[col] = X[col].fillna(fill if pd.notna(fill) else 0)
+        if fill is None or pd.isna(fill):
+            fill = 0.0
+        X[col] = X[col].fillna(fill)
     return X, medians
 
 
