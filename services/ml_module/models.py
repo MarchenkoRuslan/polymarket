@@ -71,6 +71,8 @@ def train_baseline(
     model_type: str = "logistic",
 ) -> Any:
     """Train baseline model (LR or RF). Falls back to constant if single class."""
+    if len(y_train) == 0:
+        return _ConstantClassifier(0)
     unique_classes = np.unique(y_train)
     if len(unique_classes) < 2:
         return _ConstantClassifier(int(unique_classes[0]))

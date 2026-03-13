@@ -78,7 +78,7 @@ def run_backtest(
         else 0.0
     )
     cummax = eq_series.cummax()
-    drawdown = (eq_series - cummax) / cummax
+    drawdown = (eq_series - cummax) / cummax.replace(0, float("inf"))
     max_dd = drawdown.min() if len(drawdown) > 0 else 0.0
 
     return BacktestResult(
