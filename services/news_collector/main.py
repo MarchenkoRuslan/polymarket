@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from sqlalchemy import text
+from sqlalchemy import inspect as sa_inspect, text
 from db import SessionLocal
 from services.news_collector.rss_loader import fetch_rss, filter_by_keywords
 
@@ -24,8 +24,7 @@ KEYWORDS = os.getenv("NEWS_KEYWORDS", "election,trump,biden,market,polymarket").
 
 def ensure_news_table(session) -> None:
     """Create news table if not exists (SQLite and PostgreSQL compatible)."""
-    from sqlalchemy import inspect
-    insp = inspect(session.bind)
+    insp = sa_inspect(session.bind)
     if "news" not in insp.get_table_names():
         dialect = session.bind.dialect.name
         if dialect == "sqlite":

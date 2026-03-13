@@ -1,4 +1,5 @@
 """Tests for backtester engine."""
+import numpy as np
 import pandas as pd
 
 from services.backtester.engine import (
@@ -11,7 +12,6 @@ from services.backtester.engine import (
 
 def _make_price_series(n: int = 100, trend: float = 0.001, volatility: float = 0.01) -> pd.DataFrame:
     """Generate synthetic price series."""
-    import numpy as np
     prices = 0.5 + trend * np.arange(n) + volatility * np.random.randn(n).cumsum()
     prices = np.clip(prices, 0.01, 0.99)
     return pd.DataFrame({"ts": range(n), "price": prices})

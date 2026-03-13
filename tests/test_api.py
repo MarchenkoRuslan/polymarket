@@ -1,7 +1,5 @@
 """Tests for FastAPI endpoints."""
-import os
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,11 +7,11 @@ from sqlalchemy import text
 
 
 @pytest.fixture
-def client(tmp_path):
+def client(tmp_path, monkeypatch):
     """Client with file-based SQLite so all connections share the same DB."""
     db_file = tmp_path / "test.db"
-    os.environ["DATABASE_URL"] = f"sqlite:///{db_file}"
-    os.environ["DATABASE_SSLMODE"] = "disable"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_file}")
+    monkeypatch.setenv("DATABASE_SSLMODE", "disable")
 
     import importlib
     import config.settings
@@ -38,12 +36,10 @@ def client(tmp_path):
                 conn.execute(text(stmt))
         conn.commit()
 
-    def init_db_mock():
-        pass
+    server._skip_lifespan = True
 
-    with patch("api.app.init_db", side_effect=init_db_mock):
-        from api.app import app
-        return TestClient(app)
+    from api.app import app
+    return TestClient(app)
 
 
 def test_root_returns_ok(client):

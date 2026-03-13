@@ -182,6 +182,7 @@ def _get_status_response() -> StatusOut:
         orderbook=data.get("orderbook", 0),
         features=data.get("features", 0),
         signals=data.get("signals", 0),
+        migration_error=data.get("migration_error"),
         last_collect_error=data.get("last_collect_error"),
         last_features_error=data.get("last_features_error"),
         last_ml_error=data.get("last_ml_error"),
