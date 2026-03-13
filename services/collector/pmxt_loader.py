@@ -73,17 +73,37 @@ def load_pmxt_parquet_hourly(
 
 
 def _parse_ts(raw_ts):
-    """Parse timestamp from various PMXT formats into timezone-aware datetime."""
+    """Parse timestamp from various PMXT formats into timezone-aware datetime.
+
+    Returns None for unparseable values.
+    """
+    if raw_ts is None:
+        return None
     if hasattr(raw_ts, "to_pydatetime"):
         dt = raw_ts.to_pydatetime()
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt
     if isinstance(raw_ts, (int, float)):
+        import math
+        if math.isnan(raw_ts):
+            return None
         if raw_ts > 1e12:
             raw_ts = raw_ts / 1000
         return datetime.fromtimestamp(raw_ts, tz=timezone.utc)
-    return raw_ts
+    if isinstance(raw_ts, str):
+        try:
+            dt = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except (ValueError, TypeError):
+            return None
+    if isinstance(raw_ts, datetime):
+        if raw_ts.tzinfo is None:
+            raw_ts = raw_ts.replace(tzinfo=timezone.utc)
+        return raw_ts
+    return None
 
 
 def _get_ts_field(row):
@@ -112,11 +132,18 @@ def trades_to_rows(df: pd.DataFrame, market_id_col: str = "market") -> list[dict
     for _, row in df.iterrows():
         raw_ts = _get_ts_field(row)
         ts = _parse_ts(raw_ts)
+        if ts is None:
+            continue
         market_id = _get_market_id(row, market_id_col)
         if not market_id:
             continue
-        price = float(row.get("price", row.get("outcome_price", 0)))
-        size = float(row.get("size", row.get("volume", 0)))
+        try:
+            price = float(row.get("price", row.get("outcome_price", 0)))
+            size = float(row.get("size", row.get("volume", 0)))
+        except (TypeError, ValueError):
+            continue
+        if price != price or size != size:  # NaN check
+            continue
         side = str(row.get("side", "buy"))[:4]
         rows.append({"ts": ts, "market_id": market_id, "price": price, "size": size, "side": side})
     return rows
@@ -132,13 +159,18 @@ def orderbook_to_rows(
     for _, row in df.iterrows():
         raw_ts = _get_ts_field(row)
         ts = _parse_ts(raw_ts)
+        if ts is None:
+            continue
         market_id = _get_market_id(row, market_id_col)
         if not market_id:
             continue
-        bid_price = float(row.get("bid_price", row.get("best_bid", row.get("bid", 0))))
-        bid_qty = float(row.get("bid_qty", row.get("bid_size", 0)))
-        ask_price = float(row.get("ask_price", row.get("best_ask", row.get("ask", 0))))
-        ask_qty = float(row.get("ask_qty", row.get("ask_size", 0)))
+        try:
+            bid_price = float(row.get("bid_price", row.get("best_bid", row.get("bid", 0))))
+            bid_qty = float(row.get("bid_qty", row.get("bid_size", 0)))
+            ask_price = float(row.get("ask_price", row.get("best_ask", row.get("ask", 0))))
+            ask_qty = float(row.get("ask_qty", row.get("ask_size", 0)))
+        except (TypeError, ValueError):
+            continue
         rows.append({
             "ts": ts, "market_id": market_id,
             "bid_price": bid_price, "bid_qty": bid_qty,
@@ -155,11 +187,16 @@ def orderbook_to_trade_rows(df: pd.DataFrame, market_id_col: str = "market") -> 
     for _, row in df.iterrows():
         raw_ts = _get_ts_field(row)
         ts = _parse_ts(raw_ts)
+        if ts is None:
+            continue
         market_id = _get_market_id(row, market_id_col)
         if not market_id:
             continue
-        bid = float(row.get("bid_price", row.get("best_bid", row.get("bid", 0))))
-        ask = float(row.get("ask_price", row.get("best_ask", row.get("ask", 0))))
+        try:
+            bid = float(row.get("bid_price", row.get("best_bid", row.get("bid", 0))))
+            ask = float(row.get("ask_price", row.get("best_ask", row.get("ask", 0))))
+        except (TypeError, ValueError):
+            continue
         mid = (bid + ask) / 2 if (bid and ask) else bid or ask
         if mid <= 0 or mid >= 1:
             continue

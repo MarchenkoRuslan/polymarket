@@ -3,12 +3,12 @@ import pandas as pd
 
 
 def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
-    """RSI = 100 - 100/(1 + RS), RS = avg_gain / avg_loss."""
+    """RSI = 100 - 100/(1 + RS) using Wilder's smoothing (EMA with alpha=1/period)."""
     delta = series.diff()
     gain = delta.where(delta > 0, 0.0)
     loss = (-delta).where(delta < 0, 0.0)
-    avg_gain = gain.rolling(window=period, min_periods=period).mean()
-    avg_loss = loss.rolling(window=period, min_periods=period).mean()
+    avg_gain = gain.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
     rs = avg_gain / avg_loss.replace(0, 1e-9)
     return 100 - (100 / (1 + rs))
 
@@ -34,7 +34,7 @@ def compute_price_features(df: pd.DataFrame, price_col: str = "price") -> pd.Dat
     p = out[price_col]
     out["ma_1h"] = p.rolling(window=60, min_periods=1).mean()
     out["ma_5m"] = p.rolling(window=5, min_periods=1).mean()
-    out["volatility_1h"] = p.pct_change().rolling(window=60, min_periods=2).std().fillna(0)
+    out["volatility_1h"] = p.pct_change().rolling(window=60, min_periods=2).std()
     out["roc_1h"] = (p - p.shift(60)) / p.shift(60).replace(0, 1e-9)
     out["rsi_14"] = compute_rsi(p, 14)
     macd_line, signal_line, hist = compute_macd(p)

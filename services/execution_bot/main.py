@@ -82,6 +82,7 @@ def check_open_positions(session, config: RiskConfig, dry_run: bool) -> None:
                 order_id, market_id[:16], entry_price, current_price,
             )
             close_side = "sell" if side == "buy" else "buy"
+            # See NOTE in run(): market_id used as token_id placeholder
             place_order(
                 token_id=market_id,
                 side=close_side,
@@ -115,7 +116,13 @@ def run():
         check_open_positions(session, config, dry_run)
 
         result = session.execute(
-            text("SELECT ts, market_id, prediction FROM signals ORDER BY ts DESC LIMIT 20")
+            text(
+                "SELECT s.ts, s.market_id, s.prediction FROM signals s "
+                "INNER JOIN ("
+                "  SELECT market_id, MAX(ts) AS max_ts FROM signals GROUP BY market_id"
+                ") latest ON s.market_id = latest.market_id AND s.ts = latest.max_ts "
+                "ORDER BY s.ts DESC LIMIT 20"
+            )
         )
         signals = result.fetchall()
         positions_count = 0
@@ -138,9 +145,15 @@ def run():
             if size <= 0:
                 continue
 
+            # NOTE: For real orders, token_id (from clobTokenIds) is required,
+            # not market_id (conditionId). In dry_run mode market_id is used
+            # as a placeholder. For live trading, a market→token mapping
+            # must be maintained (e.g. by storing clobTokenIds during collection).
+            token_id = market_id
+
             limit_px = _limit_price(pred, side)
             order = place_order(
-                token_id=market_id,
+                token_id=token_id,
                 side=side,
                 price=limit_px,
                 size=size,

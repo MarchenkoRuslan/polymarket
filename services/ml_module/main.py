@@ -88,14 +88,19 @@ def run():
             except Exception as e:
                 logger.warning("Market %s: ML failed: %s", mid[:16], e)
 
-        session.execute(text("DELETE FROM signals"))
+        updated_markets = list({s["m"] for s in pending_signals})
+        for mid in updated_markets:
+            session.execute(
+                text("DELETE FROM signals WHERE market_id = :m"),
+                {"m": mid},
+            )
         for sig in pending_signals:
             session.execute(
                 text("INSERT INTO signals (ts, market_id, prediction) VALUES (:ts, :m, :p)"),
                 sig,
             )
         session.commit()
-        logger.info("Signals replaced atomically: %d new signals", len(pending_signals))
+        logger.info("Signals updated for %d markets: %d new signals", len(updated_markets), len(pending_signals))
     except Exception as e:
         session.rollback()
         logger.exception("%s", e)

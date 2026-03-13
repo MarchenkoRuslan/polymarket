@@ -1,9 +1,10 @@
 """API routes for markets, trades, orderbook, signals, status."""
+import logging
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
-from collections import defaultdict
 
 from api.schemas import (
     AnalyticsOut,
@@ -25,6 +26,8 @@ from api.schemas import (
 )
 from db import get_db
 from server import _get_status
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["data"])
 
@@ -434,8 +437,8 @@ def _get_analytics(session: Session) -> AnalyticsOut:
             }
             for r in rows
         ]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Analytics trade_stats: %s", exc)
 
     try:
         rows = session.execute(text(
@@ -453,8 +456,8 @@ def _get_analytics(session: Session) -> AnalyticsOut:
             }
             for r in rows
         ]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Analytics query error: %s", exc)
 
     try:
         rows = session.execute(text(
@@ -464,8 +467,8 @@ def _get_analytics(session: Session) -> AnalyticsOut:
         result.signal_distribution = [
             {"bucket": _safe_float(r[0]), "count": r[1]} for r in rows
         ]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Analytics query error: %s", exc)
 
     try:
         rows = session.execute(text(
@@ -483,8 +486,8 @@ def _get_analytics(session: Session) -> AnalyticsOut:
             }
             for r in rows
         ]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Analytics query error: %s", exc)
 
     try:
         rows = session.execute(text(
@@ -500,31 +503,31 @@ def _get_analytics(session: Session) -> AnalyticsOut:
                 "cumulative": round(cumulative, 4),
             })
         result.pnl_timeline = pnl
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Analytics query error: %s", exc)
 
     try:
         result.total_trades = session.execute(text("SELECT COUNT(*) FROM trades")).scalar() or 0
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Analytics query error: %s", exc)
     try:
         result.total_volume = round(
             _safe_float(session.execute(text("SELECT COALESCE(SUM(size), 0) FROM trades")).scalar()), 4
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Analytics query error: %s", exc)
     try:
         result.total_profit = round(
             _safe_float(session.execute(text("SELECT COALESCE(SUM(profit), 0) FROM results")).scalar()), 4
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Analytics query error: %s", exc)
     try:
         result.avg_prediction = round(
             _safe_float(session.execute(text("SELECT COALESCE(AVG(prediction), 0) FROM signals")).scalar()), 4
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Analytics query error: %s", exc)
     try:
         result.avg_spread_bps = round(
             _safe_float(session.execute(text(
@@ -534,8 +537,8 @@ def _get_analytics(session: Session) -> AnalyticsOut:
                 "ELSE 0 END), 0) FROM orderbook"
             )).scalar()), 2
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Analytics query error: %s", exc)
 
     try:
         feat_rows = session.execute(text(
@@ -561,8 +564,8 @@ def _get_analytics(session: Session) -> AnalyticsOut:
                         "correlation": round(corr, 3),
                     })
         result.feature_correlations = correlations
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Analytics query error: %s", exc)
 
     return result
 

@@ -24,12 +24,14 @@ DEFAULT_FEEDS = [
     "https://feeds.reuters.com/reuters/topNews",
 ]
 
-KEYWORDS = os.getenv(
-    "NEWS_KEYWORDS",
-    "election,trump,biden,polymarket,prediction market,crypto,betting,odds,"
-    "forecast,poll,probability,wager,futures,congress,senate,president,"
-    "democrat,republican,vote,market,trade,economy",
-).split(",")
+KEYWORDS = [
+    k.strip() for k in os.getenv(
+        "NEWS_KEYWORDS",
+        "election,trump,biden,polymarket,prediction market,crypto,betting,odds,"
+        "forecast,poll,probability,wager,futures,congress,senate,president,"
+        "democrat,republican,vote,market,trade,economy",
+    ).split(",") if k.strip()
+]
 
 
 def ensure_news_table(session) -> None:
@@ -66,7 +68,7 @@ def ensure_news_table(session) -> None:
 
 
 def insert_news(session, source: str, title: str, link: str, summary: str, ts: datetime) -> bool:
-    """Insert news item if link is not already stored. Returns True if inserted."""
+    """Insert news item if not already stored. Deduplicates by link or by title+source."""
     if link:
         exists = session.execute(
             text("SELECT 1 FROM news WHERE link = :link LIMIT 1"),
@@ -74,6 +76,14 @@ def insert_news(session, source: str, title: str, link: str, summary: str, ts: d
         ).fetchone()
         if exists:
             return False
+    else:
+        if title:
+            exists = session.execute(
+                text("SELECT 1 FROM news WHERE title = :title AND source = :source LIMIT 1"),
+                {"title": title, "source": source},
+            ).fetchone()
+            if exists:
+                return False
     session.execute(
         text("""
             INSERT INTO news (ts, source, title, link, summary)
