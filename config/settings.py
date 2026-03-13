@@ -21,18 +21,24 @@ DATABASE_SSLMODE = os.getenv("DATABASE_SSLMODE", "require")
 
 
 def _apply_sslmode(url: str, sslmode: str) -> str:
-    """Append sslmode to a PostgreSQL URL if not already present."""
+    """Append sslmode to a PostgreSQL URL if not already present.
+
+    All valid libpq sslmode values (disable, allow, prefer, require,
+    verify-ca, verify-full) are forwarded.  The parameter is only
+    skipped when *sslmode* is empty / None or when the URL already
+    contains an explicit ``sslmode`` query parameter.
+    """
     if not url or not url.startswith("postgresql"):
+        return url
+    if not sslmode:
         return url
     parsed = urlparse(url)
     qs = parse_qs(parsed.query)
     if "sslmode" in qs:
         return url
-    if sslmode and sslmode != "disable":
-        qs["sslmode"] = [sslmode]
-        new_query = urlencode(qs, doseq=True)
-        return urlunparse(parsed._replace(query=new_query))
-    return url
+    qs["sslmode"] = [sslmode]
+    new_query = urlencode(qs, doseq=True)
+    return urlunparse(parsed._replace(query=new_query))
 
 
 DATABASE_URL = _apply_sslmode(_db_url, DATABASE_SSLMODE)
