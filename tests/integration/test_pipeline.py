@@ -46,7 +46,7 @@ def test_pipeline_features_to_ml(db_session):
     """Insert trades + features -> ML produces signals."""
     from services.collector.db_writer import insert_trade, upsert_market
     from services.feature_store.features import compute_all
-    from services.ml_module.models import FEATURE_COLS, prepare_xy, train_baseline, walk_forward_validate
+    from services.ml_module.models import FEATURE_COLS, prepare_xy, impute_features, train_baseline, walk_forward_validate
 
     upsert_market(db_session, {"id": "m2", "question": "Q2", "event_id": "e1", "outcome_settled": False})
     base = datetime(2025, 1, 1, 12, 0, 0)
@@ -66,7 +66,8 @@ def test_pipeline_features_to_ml(db_session):
     X, y = prepare_xy(df, "target")
     metrics = walk_forward_validate(X, y, n_splits=3)
     assert "roc_auc" in metrics
-    model = train_baseline(X, y)
+    X_imputed, _ = impute_features(X)
+    model = train_baseline(X_imputed, y)
     assert model is not None
 
 

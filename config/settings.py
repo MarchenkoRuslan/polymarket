@@ -16,8 +16,9 @@ _raw_db_url = os.getenv(
 _db_url = _raw_db_url.replace("postgres://", "postgresql://", 1) if _raw_db_url else _raw_db_url
 
 # SSL mode for PostgreSQL connections (require, verify-ca, verify-full, prefer, disable)
-# Default: "require" for PostgreSQL on Railway / production; ignored for SQLite
-DATABASE_SSLMODE = os.getenv("DATABASE_SSLMODE", "require")
+# Default: "prefer" — tries SSL, falls back to non-SSL if unavailable.
+# Use "require" in production (Railway), "disable" for local dev without SSL.
+DATABASE_SSLMODE = os.getenv("DATABASE_SSLMODE", "prefer")
 
 
 def _apply_sslmode(url: str, sslmode: str) -> str:

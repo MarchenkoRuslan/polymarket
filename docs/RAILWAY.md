@@ -13,7 +13,7 @@
 | Переменная | Значение |
 |------------|----------|
 | `DATABASE_URL` | Автоматически от PostgreSQL |
-| `DATABASE_SSLMODE` | `require` (по умолчанию). Railway PostgreSQL использует SSL |
+| `DATABASE_SSLMODE` | `require` (рекомендуется для Railway). По умолчанию `prefer` — пробует SSL, fallback без SSL |
 | `POLYMARKET_CLOB_API` | `https://clob.polymarket.com` |
 | `POLYMARKET_GAMMA_API` | `https://gamma-api.polymarket.com` |
 | `API_RATE_LIMIT` | `60` |
@@ -22,9 +22,10 @@
 
 ## 3. SSL-подключение к PostgreSQL
 
-Railway PostgreSQL автоматически генерирует SSL-сертификаты при инициализации. Приложение подключается с `sslmode=require` по умолчанию.
+Railway PostgreSQL автоматически генерирует SSL-сертификаты при инициализации.
 
-- **`DATABASE_SSLMODE=require`** — SSL обязателен, сертификат сервера не проверяется (достаточно для Railway)
+- **`DATABASE_SSLMODE=prefer`** (по умолчанию) — пробует SSL, если недоступен — подключается без. Безопасно для локальной разработки и продакшена
+- **`DATABASE_SSLMODE=require`** — SSL обязателен, рекомендуется для Railway (добавьте в переменные сервиса)
 - **`DATABASE_SSLMODE=disable`** — для локальной разработки без SSL
 - Если `DATABASE_URL` уже содержит `?sslmode=...`, значение из URL имеет приоритет
 
