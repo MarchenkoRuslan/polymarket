@@ -3,7 +3,6 @@ import logging
 import os
 import threading
 import time
-from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 _migration_error = None
@@ -11,6 +10,7 @@ _last_collect_error = None
 _last_features_error = None
 _last_ml_error = None
 _last_pipeline_error = None
+_skip_lifespan = False
 
 _TABLE_NAMES = ("markets", "trades", "orderbook", "features", "signals")
 
@@ -149,6 +149,7 @@ def _get_status():
 
 
 def main():
+    global _skip_lifespan
     import sys
 
     # Ensure 'import server' in submodules returns this module, not a second copy.
@@ -161,16 +162,14 @@ def main():
     init_db()
     t = threading.Thread(target=pipeline_loop, daemon=True)
     t.start()
+
+    _skip_lifespan = True
+
     port = int(os.environ.get("PORT", 8000))
 
     import uvicorn
     from api.app import app
 
-    @asynccontextmanager
-    async def _noop_lifespan(_app):
-        yield
-
-    app.router.lifespan_context = _noop_lifespan  # type: ignore[assignment]
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
 
