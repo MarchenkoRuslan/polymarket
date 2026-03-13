@@ -13,6 +13,7 @@ from services.ml_module.models import (
     train_baseline,
     walk_forward_validate,
     prepare_xy,
+    impute_features,
     FEATURE_COLS,
 )
 from services.feature_store.features import compute_all
@@ -49,8 +50,7 @@ def run():
             result = session.execute(text("SELECT DISTINCT market_id FROM trades"))
             markets = [r[0] for r in result.fetchall()]
 
-        session.execute(text("DELETE FROM signals"))
-        session.commit()
+        pending_signals: list[dict] = []
 
         for mid in markets[:20]:
             try:
@@ -74,22 +74,28 @@ def run():
                 split_idx = int(len(X) * 0.8)
                 if split_idx < 5:
                     continue
-                X_train, X_oos = X.iloc[:split_idx], X.iloc[split_idx:]
+                X_train_raw, X_oos_raw = X.iloc[:split_idx], X.iloc[split_idx:]
                 y_train = y.iloc[:split_idx]
-                if X_oos.empty:
+                if X_oos_raw.empty:
                     continue
+                X_train, train_medians = impute_features(X_train_raw)
+                X_oos, _ = impute_features(X_oos_raw, medians=train_medians)
                 model = train_baseline(X_train, y_train, "logistic")
                 proba = model.predict_proba(X_oos)[:, 1]
                 ts_oos = df["ts"].iloc[split_idx:]
                 for ts, p in zip(ts_oos, proba):
-                    session.execute(
-                        text("INSERT INTO signals (ts, market_id, prediction) VALUES (:ts, :m, :p)"),
-                        {"ts": ts, "m": mid, "p": float(p)},
-                    )
-                session.commit()
+                    pending_signals.append({"ts": ts, "m": mid, "p": float(p)})
             except Exception as e:
-                session.rollback()
                 logger.warning("Market %s: ML failed: %s", mid[:16], e)
+
+        session.execute(text("DELETE FROM signals"))
+        for sig in pending_signals:
+            session.execute(
+                text("INSERT INTO signals (ts, market_id, prediction) VALUES (:ts, :m, :p)"),
+                sig,
+            )
+        session.commit()
+        logger.info("Signals replaced atomically: %d new signals", len(pending_signals))
     except Exception as e:
         session.rollback()
         logger.exception("%s", e)
