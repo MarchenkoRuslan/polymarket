@@ -99,4 +99,13 @@ async def rate_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def cache_control_middleware(request: Request, call_next):
+    """Add Cache-Control and ETag headers to API responses."""
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
+    return response
+
+
 app.include_router(router)
