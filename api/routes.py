@@ -152,6 +152,19 @@ def _get_orderbook(session: Session, market_id: str | None, limit: int = 100, of
     return OrderbookList(items=items, total=total)
 
 
+BUY_THRESHOLD = 0.55
+SELL_THRESHOLD = 0.35
+
+
+def _signal_label(prediction: float) -> str:
+    """Classify prediction into buy/hold/sell using backtester-aligned thresholds."""
+    if prediction >= BUY_THRESHOLD:
+        return "buy"
+    if prediction < SELL_THRESHOLD:
+        return "sell"
+    return "hold"
+
+
 def _get_signals(session: Session, market_id: str | None, limit: int = 100, offset: int = 0) -> SignalsList:
     limit, offset = _clamp_pagination(limit, offset)
     if market_id:
@@ -176,7 +189,11 @@ def _get_signals(session: Session, market_id: str | None, limit: int = 100, offs
             {"lim": limit, "off": offset},
         ).fetchall()
     items = [
-        SignalOut(id=r[0], ts=r[1], market_id=r[2], prediction=_safe_float(r[3]))
+        SignalOut(
+            id=r[0], ts=r[1], market_id=r[2],
+            prediction=_safe_float(r[3]),
+            signal_label=_signal_label(_safe_float(r[3])),
+        )
         for r in rows
     ]
     return SignalsList(items=items, total=total)

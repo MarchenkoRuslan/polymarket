@@ -65,6 +65,7 @@ class SignalOut(BaseModel):
     ts: datetime
     market_id: str
     prediction: float
+    signal_label: str = "hold"
 
 
 class SignalsList(BaseModel):

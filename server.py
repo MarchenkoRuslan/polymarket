@@ -79,8 +79,18 @@ def run_ml():
         raise
 
 
+def run_news():
+    """Run News Collector (blocking). Errors are non-fatal for the pipeline."""
+    try:
+        import asyncio
+        from services.news_collector.main import main as news_main
+        asyncio.run(news_main())
+    except Exception as e:
+        logger.warning("News Collector error (non-fatal): %s", e)
+
+
 def run_pipeline():
-    """Run full pipeline: collector → feature_store → ml_module."""
+    """Run full pipeline: collector → news → feature_store → ml_module."""
     global _last_pipeline_error
     _last_pipeline_error = None
     try:
@@ -89,6 +99,7 @@ def run_pipeline():
         _last_pipeline_error = str(e)
         logger.warning("Pipeline aborted after collect failure")
         return
+    run_news()
     try:
         run_features()
     except Exception as e:

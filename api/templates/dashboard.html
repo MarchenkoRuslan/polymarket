@@ -108,6 +108,13 @@
     .loading-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem 0; flex-wrap: wrap; }
+    .pagination button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.7rem; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; }
+    .pagination button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent); }
+    .pagination button:disabled { opacity: 0.4; cursor: default; }
+    .pagination button.pg-active { background: var(--accent); border-color: var(--accent); }
+    .pagination .pg-info { font-size: 0.75rem; color: var(--muted); }
+
     .market-hint { margin: 0 1.5rem 0.5rem; padding: 0.5rem 0.75rem; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); border-radius: 8px; font-size: 0.78rem; color: var(--amber); display: none; }
     .market-hint.visible { display: block; }
   </style>
@@ -117,7 +124,8 @@
     <h1>Polymarket Analytics</h1>
     <div class="header-controls">
       <select id="marketFilter"><option value="">All Markets (summary)</option></select>
-      <button id="refreshBtn" onclick="D.toggleRefresh()" title="Auto-refresh every 30s">Auto</button>
+      <button id="refreshBtnManual" onclick="D.loadAll()" title="Refresh data now" style="font-size:0.85rem">&#x21bb; Refresh</button>
+      <button id="refreshBtn" onclick="D.toggleRefresh()" title="When active, dashboard reloads data every 30 seconds automatically">&#9202; Auto-refresh: OFF</button>
       <span class="updated" id="lastUpdated"></span>
     </div>
   </div>
@@ -218,9 +226,9 @@
   <div id="tab-signals" class="tab-panel">
     <div class="info-banner" style="margin:0 0 1rem 0">
       <strong>What is a signal?</strong> The ML model analyzes current market features and outputs the <strong>probability of price increase</strong> (0&ndash;1).
-      Value <strong>&gt; 0.6</strong> = <span class="signal-badge signal-buy">Buy</span> recommendation,
-      <strong>&lt; 0.4</strong> = <span class="signal-badge signal-sell">Sell</span>,
-      <strong>0.4&ndash;0.6</strong> = <span class="signal-badge signal-hold">Hold</span> (uncertain).
+      Value <strong>&ge; 0.55</strong> = <span class="signal-badge signal-buy">Buy</span> recommendation,
+      <strong>&lt; 0.35</strong> = <span class="signal-badge signal-sell">Sell</span>,
+      <strong>0.35&ndash;0.55</strong> = <span class="signal-badge signal-hold">Hold</span> (uncertain).
     </div>
     <div class="insight-cards" id="signalInsights"></div>
     <div class="grid-2">
@@ -271,7 +279,7 @@
   <div id="tab-news" class="tab-panel">
     <div class="card full">
       <h3><span class="dot" style="background:var(--cyan)"></span> News Feed</h3>
-      <div class="card-desc">Automatically collected news from RSS sources, filtered by prediction market keywords.</div>
+      <div class="card-desc">Automatically collected news from RSS sources (Google News, CoinDesk, CoinTelegraph, Reuters, NY Times). Filtered by prediction market keywords: elections, crypto, polls, economy, etc.</div>
       <div id="newsFeed"></div>
     </div>
   </div>
@@ -285,6 +293,8 @@ const D = {
   data: {},
   refreshId: null,
   currentTab: 'overview',
+  marketPage: 0,
+  marketsPerPage: 12,
 
   async init() {
     this.applyTabFromHash();
@@ -385,7 +395,7 @@ const D = {
     const cards = [
       { label: 'Database', value: s.db_ok ? 'OK' : 'FAIL', cls: s.db_ok ? 'ok' : 'bad' },
       { label: 'Markets', value: this.fmtN(s.markets), sub: this.countSettled() },
-      { label: 'Trades', value: this.fmtN(s.trades), sub: a ? 'Vol: ' + this.fmtN(a.total_volume) : '' },
+      { label: 'Trades', value: this.fmtN(s.trades), sub: a ? 'Vol: ' + this.fmtVolume(a.total_volume) + ' shares' : '' },
       { label: 'Features', value: this.fmtN(s.features), sub: 'RSI, MACD, vol.' },
       { label: 'Signals', value: this.fmtN(s.signals), sub: signalLabel ? 'Avg: ' + a.avg_prediction.toFixed(2) + ' (' + signalLabel + ')' : '' },
       { label: 'Orderbook', value: this.fmtN(s.orderbook), sub: a ? 'Spread: ' + a.avg_spread_bps.toFixed(0) + ' bps' : '' },
@@ -401,16 +411,25 @@ const D = {
     ).join('');
   },
 
+  BUY_THRESHOLD: 0.55,
+  SELL_THRESHOLD: 0.35,
+
   interpretSignal(prediction) {
-    if (prediction > 0.6) return 'buy';
-    if (prediction < 0.4) return 'sell';
+    if (prediction >= this.BUY_THRESHOLD) return 'buy';
+    if (prediction < this.SELL_THRESHOLD) return 'sell';
     return 'hold';
   },
 
-  signalBadge(prediction) {
-    if (prediction > 0.6) return '<span class="signal-badge signal-buy">Buy (' + prediction.toFixed(2) + ')</span>';
-    if (prediction < 0.4) return '<span class="signal-badge signal-sell">Sell (' + prediction.toFixed(2) + ')</span>';
-    return '<span class="signal-badge signal-hold">Hold (' + prediction.toFixed(2) + ')</span>';
+  signalLabel(sig) {
+    if (sig && sig.signal_label) return sig.signal_label;
+    return this.interpretSignal(sig?.prediction ?? 0.5);
+  },
+
+  signalBadge(prediction, label) {
+    const lbl = label || this.interpretSignal(prediction);
+    const cls = lbl === 'buy' ? 'signal-buy' : lbl === 'sell' ? 'signal-sell' : 'signal-hold';
+    const name = lbl.charAt(0).toUpperCase() + lbl.slice(1);
+    return '<span class="signal-badge ' + cls + '">' + name + ' (' + prediction.toFixed(2) + ')</span>';
   },
 
   countSettled() {
@@ -462,7 +481,7 @@ const D = {
     html += '<div class="chart-wrap"><canvas id="settlementPie"></canvas></div></div>';
 
     html += '<div class="card"><h3><span class="dot" style="background:var(--cyan)"></span> Volume by Market</h3>';
-    html += '<div class="card-desc">Top 8 markets by total trade volume.</div>';
+    html += '<div class="card-desc">Top 8 markets by total trade volume (log scale).</div>';
     html += '<div class="chart-wrap"><canvas id="volumeByMarket"></canvas></div></div>';
 
     html += '</div>';
@@ -473,13 +492,18 @@ const D = {
     if (!markets.length) {
       html += '<div class="empty-state"><div class="icon">&#128202;</div>No markets loaded yet. Waiting for data collection to complete.</div>';
     } else {
+      const totalPages = Math.ceil(markets.length / this.marketsPerPage);
+      this.marketPage = Math.max(0, Math.min(this.marketPage, totalPages - 1));
+      const start = this.marketPage * this.marketsPerPage;
+      const pageMarkets = markets.slice(start, start + this.marketsPerPage);
+
       html += '<div style="overflow-x:auto"><table class="data"><thead><tr>';
-      html += '<th>Market (question)</th><th>Status</th><th>Trades</th><th>Volume</th><th>Avg Price</th><th>Latest Signal</th>';
+      html += '<th>Market (question)</th><th>Status</th><th>Trades</th><th>Volume (shares)</th><th>Avg Price</th><th>Latest Signal</th>';
       html += '</tr></thead><tbody>';
-      markets.forEach(m => {
+      pageMarkets.forEach(m => {
         const st = stats.find(s => s.market_id === m.market_id);
         const sigs = signalsByMarket[m.market_id] || [];
-        const lastSig = sigs.length > 0 ? sigs[sigs.length - 1] : null;
+        const lastSigPred = sigs.length > 0 ? sigs[sigs.length - 1] : null;
         const settled = m.outcome_settled != null && m.outcome_settled !== false;
         const statusBadge = settled
           ? '<span class="badge badge-green">Settled</span>'
@@ -489,12 +513,27 @@ const D = {
         html += '<td title="' + (m.market_id) + '">' + (m.question || m.event || m.market_id).substring(0, 55) + '</td>';
         html += '<td>' + statusBadge + '</td>';
         html += '<td>' + (st ? this.fmtN(st.trade_count) : '—') + '</td>';
-        html += '<td>' + (st ? this.fmtN(st.total_volume) : '—') + '</td>';
+        html += '<td>' + (st ? this.fmtVolume(st.total_volume) : '—') + '</td>';
         html += '<td>' + (st ? st.avg_price.toFixed(3) : '—') + '</td>';
-        html += '<td>' + (lastSig !== null ? this.signalBadge(lastSig) : '<span class="text-muted">—</span>') + '</td>';
+        html += '<td>' + (lastSigPred !== null ? this.signalBadge(lastSigPred) : '<span class="text-muted">—</span>') + '</td>';
         html += '</tr>';
       });
       html += '</tbody></table></div>';
+
+      if (totalPages > 1) {
+        html += '<div class="pagination">';
+        html += '<button onclick="D.goMarketPage(0)" ' + (this.marketPage === 0 ? 'disabled' : '') + '>&laquo;</button>';
+        html += '<button onclick="D.goMarketPage(' + (this.marketPage - 1) + ')" ' + (this.marketPage === 0 ? 'disabled' : '') + '>&lsaquo; Prev</button>';
+        const startPage = Math.max(0, this.marketPage - 2);
+        const endPage = Math.min(totalPages, startPage + 5);
+        for (let i = startPage; i < endPage; i++) {
+          html += '<button onclick="D.goMarketPage(' + i + ')" class="' + (i === this.marketPage ? 'pg-active' : '') + '">' + (i + 1) + '</button>';
+        }
+        html += '<button onclick="D.goMarketPage(' + (this.marketPage + 1) + ')" ' + (this.marketPage >= totalPages - 1 ? 'disabled' : '') + '>Next &rsaquo;</button>';
+        html += '<button onclick="D.goMarketPage(' + (totalPages - 1) + ')" ' + (this.marketPage >= totalPages - 1 ? 'disabled' : '') + '>&raquo;</button>';
+        html += '<span class="pg-info">' + (start + 1) + '–' + Math.min(start + this.marketsPerPage, markets.length) + ' of ' + markets.length + '</span>';
+        html += '</div>';
+      }
     }
     html += '</div>';
 
@@ -502,6 +541,11 @@ const D = {
 
     this.chartSettlementPie();
     this.chartVolumeByMarket();
+  },
+
+  goMarketPage(page) {
+    this.marketPage = page;
+    this.renderOverview();
   },
 
   renderOverviewSingleMarket(el) {
@@ -524,7 +568,7 @@ const D = {
     }
     if (signals.length) {
       const lastSig = signals[signals.length - 1];
-      html += '<div style="margin-top:0.5rem">Latest ML signal: ' + this.signalBadge(lastSig.prediction) + '</div>';
+      html += '<div style="margin-top:0.5rem">Latest ML signal: ' + this.signalBadge(lastSig.prediction, lastSig.signal_label) + '</div>';
     }
     html += '</div>';
 
@@ -586,14 +630,24 @@ const D = {
     this.makeChart('volumeByMarket', 'bar', {
       labels: top.map(s => this.truncate(s.question || s.market_id, 30)),
       datasets: [{
-        label: 'Volume', data: top.map(s => s.total_volume),
+        label: 'Volume (shares)', data: top.map(s => s.total_volume),
         backgroundColor: COLORS.slice(0, 8), borderRadius: 4,
       }]
     }, {
       indexAxis: 'y',
       scales: {
-        x: { title: { display: true, text: 'Total Volume', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        x: {
+          type: 'logarithmic',
+          title: { display: true, text: 'Total Volume (shares, log scale)', color: '#64748b' },
+          ticks: { color: '#64748b', font: { size: 10 }, callback: v => this.fmtVolume(v) },
+          grid: { color: 'rgba(71,85,105,0.3)' },
+        },
         y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: { label: ctx => 'Volume: ' + this.fmtVolume(ctx.raw) + ' shares' }
+        }
       }
     });
   },
@@ -608,10 +662,10 @@ const D = {
         borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.1)',
         fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
       }, {
-        label: 'Buy threshold (0.6)', data: signals.map(() => 0.6),
+        label: 'Buy threshold (' + this.BUY_THRESHOLD + ')', data: signals.map(() => this.BUY_THRESHOLD),
         borderColor: 'rgba(34,197,94,0.35)', borderDash: [5,5], pointRadius: 0, borderWidth: 1, fill: false,
       }, {
-        label: 'Sell threshold (0.4)', data: signals.map(() => 0.4),
+        label: 'Sell threshold (' + this.SELL_THRESHOLD + ')', data: signals.map(() => this.SELL_THRESHOLD),
         borderColor: 'rgba(239,68,68,0.35)', borderDash: [5,5], pointRadius: 0, borderWidth: 1, fill: false,
       }]
     }, {
@@ -678,7 +732,7 @@ const D = {
       scales: {
         x: { ticks: { maxTicksLimit: 12, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
         yPrice: { position: 'left', title: { display: true, text: 'Price (probability)', color: '#6366f1' }, ticks: { color: '#6366f1', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
-        yVol: { position: 'right', title: { display: true, text: 'Volume', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+        yVol: { position: 'right', title: { display: true, text: 'Volume (shares)', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 }, callback: v => this.fmtVolume(v) }, grid: { display: false } },
       },
       plugins: { legend: { labels: { color: '#94a3b8' } } }
     });
@@ -704,13 +758,13 @@ const D = {
     const stats = this.data.analytics?.trade_stats || [];
     const el = document.getElementById('tradeStatsTable');
     if (!stats.length) { el.innerHTML = '<div class="empty-state">No trade data available</div>'; return; }
-    el.innerHTML = '<table class="data"><thead><tr><th>Market</th><th>Trades</th><th>Volume</th><th>Avg Price</th><th>Buy%</th></tr></thead><tbody>' +
+    el.innerHTML = '<table class="data"><thead><tr><th>Market</th><th>Trades</th><th>Volume (shares)</th><th>Avg Price</th><th>Buy%</th></tr></thead><tbody>' +
       stats.map(s => {
         const buyPct = s.trade_count > 0 ? ((s.buy_count / s.trade_count) * 100).toFixed(0) : '—';
         const buyClass = buyPct > 55 ? 'text-green' : buyPct < 45 ? 'text-red' : '';
         return '<tr class="clickable" onclick="D.selectMarket(\'' + s.market_id + '\')">' +
           '<td title="' + (s.market_id) + '">' + this.truncate(s.question || s.market_id, 30) + '</td>' +
-          '<td>' + this.fmtN(s.trade_count) + '</td><td>' + this.fmtN(s.total_volume) + '</td>' +
+          '<td>' + this.fmtN(s.trade_count) + '</td><td>' + this.fmtVolume(s.total_volume) + '</td>' +
           '<td>' + s.avg_price.toFixed(3) + '</td><td class="' + buyClass + '">' + buyPct + '%</td></tr>';
       }).join('') + '</tbody></table>';
   },
@@ -897,15 +951,15 @@ const D = {
     const preds = signals.map(s => s.prediction);
     const avg = preds.reduce((a, b) => a + b, 0) / preds.length;
     const std = Math.sqrt(preds.reduce((s, p) => s + (p - avg) ** 2, 0) / preds.length);
-    const bullish = preds.filter(p => p > 0.6).length;
-    const bearish = preds.filter(p => p < 0.4).length;
+    const bullish = preds.filter(p => p >= this.BUY_THRESHOLD).length;
+    const bearish = preds.filter(p => p < this.SELL_THRESHOLD).length;
     const neutral = preds.length - bullish - bearish;
 
     el.innerHTML = [
-      { label: 'Avg Prediction', value: avg.toFixed(3), detail: 'std: ' + std.toFixed(3) + ' | overall: ' + this.interpretSignal(avg), cls: avg > 0.5 ? 'text-green' : 'text-red' },
-      { label: 'Buy Signals', value: bullish, detail: ((bullish/preds.length)*100).toFixed(0) + '% — prediction > 0.6', cls: 'text-green' },
-      { label: 'Sell Signals', value: bearish, detail: ((bearish/preds.length)*100).toFixed(0) + '% — prediction < 0.4', cls: 'text-red' },
-      { label: 'Hold (neutral)', value: neutral, detail: ((neutral/preds.length)*100).toFixed(0) + '% — prediction 0.4–0.6', cls: 'text-amber' },
+      { label: 'Avg Prediction', value: avg.toFixed(3), detail: 'std: ' + std.toFixed(3) + ' | overall: ' + this.interpretSignal(avg), cls: avg >= 0.5 ? 'text-green' : 'text-red' },
+      { label: 'Buy Signals', value: bullish, detail: ((bullish/preds.length)*100).toFixed(0) + '% — prediction \u2265 ' + this.BUY_THRESHOLD, cls: 'text-green' },
+      { label: 'Sell Signals', value: bearish, detail: ((bearish/preds.length)*100).toFixed(0) + '% — prediction < ' + this.SELL_THRESHOLD, cls: 'text-red' },
+      { label: 'Hold (neutral)', value: neutral, detail: ((neutral/preds.length)*100).toFixed(0) + '% — prediction ' + this.SELL_THRESHOLD + '–' + this.BUY_THRESHOLD, cls: 'text-amber' },
     ].map(c =>
       '<div class="insight"><div class="insight-label">' + c.label + '</div>' +
       '<div class="insight-value ' + c.cls + '">' + c.value + '</div>' +
@@ -919,13 +973,13 @@ const D = {
     this.makeChart('signalDistChart', 'bar', {
       labels: dist.map(d => {
         const v = d.bucket;
-        if (v >= 0.6) return v.toFixed(1) + ' (buy)';
-        if (v <= 0.4) return v.toFixed(1) + ' (sell)';
+        if (v >= this.BUY_THRESHOLD) return v.toFixed(1) + ' (buy)';
+        if (v < this.SELL_THRESHOLD) return v.toFixed(1) + ' (sell)';
         return v.toFixed(1) + ' (hold)';
       }),
       datasets: [{
         label: 'Count', data: dist.map(d => d.count),
-        backgroundColor: dist.map(d => d.bucket >= 0.6 ? 'rgba(34,197,94,0.6)' : d.bucket <= 0.4 ? 'rgba(239,68,68,0.6)' : 'rgba(245,158,11,0.5)'),
+        backgroundColor: dist.map(d => d.bucket >= this.BUY_THRESHOLD ? 'rgba(34,197,94,0.6)' : d.bucket < this.SELL_THRESHOLD ? 'rgba(239,68,68,0.6)' : 'rgba(245,158,11,0.5)'),
         borderRadius: 4,
       }]
     }, {
@@ -956,7 +1010,7 @@ const D = {
       labels: entries.map(e => e.label),
       datasets: [{
         label: 'Avg Prediction', data: entries.map(e => e.avg),
-        backgroundColor: entries.map(e => e.avg >= 0.6 ? 'rgba(34,197,94,0.6)' : e.avg <= 0.4 ? 'rgba(239,68,68,0.6)' : 'rgba(245,158,11,0.5)'),
+        backgroundColor: entries.map(e => e.avg >= this.BUY_THRESHOLD ? 'rgba(34,197,94,0.6)' : e.avg < this.SELL_THRESHOLD ? 'rgba(239,68,68,0.6)' : 'rgba(245,158,11,0.5)'),
         borderRadius: 4,
       }]
     }, {
@@ -1132,17 +1186,49 @@ const D = {
   renderNews() {
     const news = this.data.news?.items || [];
     const el = document.getElementById('newsFeed');
+    const newsTab = document.querySelector('.tab[data-tab="news"]');
+    if (newsTab) {
+      newsTab.textContent = 'News' + (news.length ? ' (' + news.length + ')' : '');
+    }
     if (!news.length) {
-      el.innerHTML = '<div class="empty-state"><div class="icon">&#128240;</div>No news collected yet. The system automatically collects news from RSS sources.</div>';
+      el.innerHTML = '<div class="empty-state"><div class="icon">&#128240;</div>' +
+        '<div style="font-size:1rem;margin-bottom:0.5rem">No news collected yet</div>' +
+        '<div style="font-size:0.8rem;color:var(--text2)">News are fetched automatically from RSS sources (Google News, CoinDesk, Reuters, etc.) during each pipeline cycle. ' +
+        'If the pipeline has not run yet, please wait a few minutes.</div></div>';
       return;
     }
-    el.innerHTML = news.map(n =>
-      '<div class="news-item">' +
-      '<div class="meta"><span class="badge badge-amber">' + (n.source || 'unknown') + '</span> &middot; ' + new Date(n.ts).toLocaleString() + '</div>' +
-      '<div class="title">' + (n.link ? '<a href="' + n.link + '" target="_blank">' + (n.title || 'Untitled') + '</a>' : (n.title || 'Untitled')) + '</div>' +
-      (n.summary ? '<div class="summary">' + n.summary + '</div>' : '') +
-      '</div>'
-    ).join('');
+    const sourceColors = {
+      'Google News': 'badge-amber', 'CoinDesk': 'badge-cyan', 'CoinTelegraph': 'badge-cyan',
+      'Reuters': 'badge-green', 'NY Times': 'badge-green', 'Polymarket': 'badge-red',
+    };
+    el.innerHTML = news.map(n => {
+      const badgeCls = sourceColors[n.source] || 'badge-amber';
+      const timeAgo = this.timeAgo(n.ts);
+      return '<div class="news-item">' +
+        '<div class="meta"><span class="badge ' + badgeCls + '">' + (n.source || 'unknown') + '</span> &middot; ' + timeAgo + '</div>' +
+        '<div class="title">' + (n.link ? '<a href="' + n.link + '" target="_blank">' + (n.title || 'Untitled') + '</a>' : (n.title || 'Untitled')) + '</div>' +
+        (n.summary ? '<div class="summary">' + this.stripHtml(n.summary).substring(0, 200) + '</div>' : '') +
+        '</div>';
+    }).join('');
+  },
+
+  timeAgo(ts) {
+    if (!ts) return '';
+    const diff = Date.now() - new Date(ts).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + 'h ago';
+    const days = Math.floor(hours / 24);
+    if (days < 7) return days + 'd ago';
+    return new Date(ts).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+  },
+
+  stripHtml(html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
   },
 
   // ====== NAVIGATION ======
@@ -1159,9 +1245,11 @@ const D = {
       clearInterval(this.refreshId);
       this.refreshId = null;
       btn.classList.remove('active');
+      btn.innerHTML = '&#9202; Auto-refresh: OFF';
     } else {
       this.refreshId = setInterval(() => this.loadAll(), 30000);
       btn.classList.add('active');
+      btn.innerHTML = '&#9202; Auto-refresh: ON (30s)';
     }
   },
 
@@ -1222,9 +1310,19 @@ const D = {
 
   fmtN(n) {
     if (n == null) return '—';
+    if (typeof n === 'number' && n >= 1000000000) return (n / 1000000000).toFixed(1) + 'B';
     if (typeof n === 'number' && n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
     if (typeof n === 'number' && n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    if (typeof n === 'number') return n.toFixed(n % 1 === 0 ? 0 : 1);
     return String(n);
+  },
+
+  fmtVolume(n) {
+    if (n == null || n === 0) return '0';
+    if (n >= 1000000000) return (n / 1000000000).toFixed(2) + 'B';
+    if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toFixed(0);
   },
 
   fmtDate(d) {
