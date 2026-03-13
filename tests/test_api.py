@@ -103,13 +103,13 @@ def test_signals_returns_json(client):
 
 
 def test_status_returns_json(client):
-    """GET /api/v1/status returns JSON with db_ok, markets, trades, orderbook, features, signals."""
+    """GET /api/v1/status returns JSON with all table counts and error fields."""
     r = client.get("/api/v1/status")
     assert r.status_code == 200
     data = r.json()
-    assert "db_ok" in data
-    assert "markets" in data
-    assert "trades" in data
-    assert "orderbook" in data
-    assert "features" in data
-    assert "signals" in data
+    for field in ("db_ok", "markets", "trades", "orderbook", "features",
+                  "signals", "news", "fee_rates", "orders", "results"):
+        assert field in data, f"Missing field: {field}"
+    for table in ("markets", "trades", "orderbook", "features", "signals",
+                  "news", "fee_rates", "orders", "results"):
+        assert isinstance(data[table], int), f"{table} should be int"

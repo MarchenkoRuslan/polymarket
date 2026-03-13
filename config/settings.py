@@ -64,3 +64,6 @@ DEFAULT_FEE_BPS = _parse_int("DEFAULT_FEE_BPS", "30")
 
 # Rate limits (requests per minute)
 API_RATE_LIMIT = _parse_int("API_RATE_LIMIT", "100")
+
+# Max markets to collect detailed data (trades, orderbook) per cycle. 0 = all.
+COLLECT_MARKETS_LIMIT = _parse_int("COLLECT_MARKETS_LIMIT", "0")

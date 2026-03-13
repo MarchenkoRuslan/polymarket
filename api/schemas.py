@@ -83,6 +83,10 @@ class StatusOut(BaseModel):
     orderbook: int = 0
     features: int = 0
     signals: int = 0
+    news: int = 0
+    fee_rates: int = 0
+    orders: int = 0
+    results: int = 0
     migration_error: str | None = None
     last_collect_error: str | None = None
     last_features_error: str | None = None

@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from config import (
     API_RATE_LIMIT,
+    COLLECT_MARKETS_LIMIT,
+    DEFAULT_FEE_BPS,
     POLYMARKET_CLOB_API,
     POLYMARKET_GAMMA_API,
 )
@@ -19,6 +21,7 @@ from services.collector.db_writer import (
     upsert_market,
     insert_trade,
     insert_orderbook,
+    upsert_fee_rate,
     markets_from_events,
 )
 
@@ -95,6 +98,60 @@ def _extract_market_id(market: dict) -> str:
     return str(mid)
 
 
+async def _collect_orderbook(
+    client: PolymarketClient,
+    session,
+    market: dict,
+    market_id: str,
+    token_id: str,
+    now: datetime,
+) -> bool:
+    """Fetch orderbook: try CLOB get_orderbook() first, fallback to Gamma bestBid/bestAsk.
+
+    Returns True if an orderbook snapshot was inserted.
+    """
+    bid_p: float | None = None
+    ask_p: float | None = None
+    bid_q: float = 1.0
+    ask_q: float = 1.0
+
+    try:
+        book = await client.get_orderbook(token_id)
+        if book:
+            bids = book.get("bids") or []
+            asks = book.get("asks") or []
+            if bids and asks:
+                best_bid_entry = bids[0] if isinstance(bids[0], dict) else {"price": bids[0]}
+                best_ask_entry = asks[0] if isinstance(asks[0], dict) else {"price": asks[0]}
+                bp = float(best_bid_entry.get("price", 0))
+                ap = float(best_ask_entry.get("price", 0))
+                bq = float(best_bid_entry.get("size", best_bid_entry.get("qty", 1.0)))
+                aq = float(best_ask_entry.get("size", best_ask_entry.get("qty", 1.0)))
+                if 0 < bp < 1 and 0 < ap < 1:
+                    bid_p, ask_p = bp, ap
+                    bid_q, ask_q = bq, aq
+    except Exception as e:
+        logger.debug("CLOB orderbook for %s unavailable: %s", market_id, e)
+
+    if bid_p is None or ask_p is None:
+        raw_bid = market.get("bestBid")
+        raw_ask = market.get("bestAsk")
+        if raw_bid is not None and raw_ask is not None:
+            try:
+                bp = float(raw_bid)
+                ap = float(raw_ask)
+                if 0 < bp < 1 and 0 < ap < 1:
+                    bid_p, ask_p = bp, ap
+                    bid_q, ask_q = 1.0, 1.0
+            except (TypeError, ValueError):
+                pass
+
+    if bid_p is not None and ask_p is not None:
+        insert_orderbook(session, market_id, now, bid_p, bid_q, ask_p, ask_q)
+        return True
+    return False
+
+
 async def collect_from_api():
     """Collect markets and sample data from Polymarket API."""
     rate_delay = 60.0 / max(API_RATE_LIMIT, 10) if API_RATE_LIMIT else 0.1
@@ -116,7 +173,13 @@ async def collect_from_api():
 
         now = datetime.now(timezone.utc)
         loaded = 0
-        for m in markets[:50]:
+        ob_loaded = 0
+
+        target_markets = markets
+        if COLLECT_MARKETS_LIMIT > 0:
+            target_markets = markets[:COLLECT_MARKETS_LIMIT]
+
+        for m in target_markets:
             mid = _extract_market_id(m)
             if not mid:
                 continue
@@ -155,22 +218,21 @@ async def collect_from_api():
                     insert_trade(session, mid, now, price_val, 1.0, "buy")
                     loaded += 1
 
-            best_bid = m.get("bestBid")
-            best_ask = m.get("bestAsk")
-            if best_bid is not None and best_ask is not None:
-                try:
-                    bid_p = float(best_bid)
-                    ask_p = float(best_ask)
-                    if 0 < bid_p < 1 and 0 < ask_p < 1:
-                        insert_orderbook(session, mid, now, bid_p, 1.0, ask_p, 1.0)
-                except (TypeError, ValueError):
-                    pass
+            ob_ok = await _collect_orderbook(client, session, m, mid, asset_id, now)
+            if ob_ok:
+                ob_loaded += 1
+
+            upsert_fee_rate(session, asset_id, DEFAULT_FEE_BPS)
+
             await asyncio.sleep(0.1)
-        if loaded:
+        if loaded or ob_loaded:
             session.commit()
-            logger.info("Loaded %d price points from API", loaded)
+            logger.info(
+                "Loaded %d price points, %d orderbook snapshots from API",
+                loaded, ob_loaded,
+            )
         else:
-            logger.warning("No price points loaded from API")
+            logger.warning("No price points or orderbook data loaded from API")
     except Exception as e:
         session.rollback()
         logger.exception("Collect error: %s", e)

@@ -12,7 +12,7 @@ _last_ml_error = None
 _last_pipeline_error = None
 _skip_lifespan = False
 
-_TABLE_NAMES = ("markets", "trades", "orderbook", "features", "signals")
+_TABLE_NAMES = ("markets", "trades", "orderbook", "features", "signals", "news", "fee_rates", "orders", "results")
 
 
 def init_db():
