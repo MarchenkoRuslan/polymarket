@@ -3,130 +3,876 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Polymarket Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <title>Polymarket Analytics</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
-    h1 { margin-top: 0; }
-    h2 { margin: 1.5rem 0 0.5rem; font-size: 1rem; }
-    .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem; margin-bottom: 1rem; }
-    .stat { background: #f0f0f0; padding: 0.5rem; border-radius: 6px; text-align: center; }
-    .stat.ok { background: #d4edda; }
-    .stat.fail { background: #f8d7da; }
-    .stat span { display: block; font-size: 0.75rem; color: #666; }
-    .stat strong { font-size: 1.25rem; }
-    .errors { background: #fff3cd; border: 1px solid #ffc107; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; }
-    .errors:empty { display: none; }
-    .errors div { margin: 0.25rem 0; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #eee; }
-    th { background: #f5f5f5; }
-    .chart-wrap { height: 280px; margin: 1rem 0; }
-    .loading { color: #666; }
+    :root {
+      --bg: #0f172a; --surface: #1e293b; --surface2: #334155;
+      --border: #475569; --text: #f1f5f9; --text2: #94a3b8; --muted: #64748b;
+      --accent: #6366f1; --accent2: #818cf8;
+      --green: #22c55e; --red: #ef4444; --amber: #f59e0b; --cyan: #06b6d4;
+      --violet: #8b5cf6; --pink: #ec4899;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 100; }
+    .header h1 { font-size: 1.25rem; font-weight: 700; background: linear-gradient(135deg, var(--accent), var(--violet)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .header-controls { display: flex; gap: 0.75rem; align-items: center; }
+    .header-controls select, .header-controls button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 0.75rem; font-size: 0.8rem; cursor: pointer; transition: border-color 0.2s; }
+    .header-controls select:hover, .header-controls button:hover { border-color: var(--accent); }
+    .header-controls button.active { background: var(--accent); border-color: var(--accent); }
+    .updated { font-size: 0.7rem; color: var(--muted); }
+
+    .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; padding: 1rem 1.5rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 1rem; text-align: center; transition: border-color 0.2s, transform 0.2s; }
+    .stat-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .stat-card .label { font-size: 0.7rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+    .stat-card .value { font-size: 1.5rem; font-weight: 700; }
+    .stat-card .sub { font-size: 0.7rem; color: var(--muted); margin-top: 0.15rem; }
+    .stat-card.ok .value { color: var(--green); }
+    .stat-card.warn .value { color: var(--amber); }
+    .stat-card.bad .value { color: var(--red); }
+
+    .tabs { display: flex; gap: 0; padding: 0 1.5rem; border-bottom: 1px solid var(--border); background: var(--surface); overflow-x: auto; }
+    .tab { background: none; border: none; color: var(--text2); padding: 0.75rem 1.25rem; cursor: pointer; font-size: 0.85rem; font-weight: 500; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent2); border-bottom-color: var(--accent); }
+
+    .tab-panel { display: none; padding: 1.25rem 1.5rem; }
+    .tab-panel.active { display: block; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; transition: border-color 0.2s; }
+    .card:hover { border-color: var(--accent); }
+    .card h3 { font-size: 0.9rem; font-weight: 600; color: var(--text2); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    .card h3 .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card.full { grid-column: 1 / -1; }
+    .chart-wrap { position: relative; height: 280px; }
+    .chart-wrap.tall { height: 360px; }
+
+    .errors-bar { padding: 0.5rem 1.5rem; }
+    .errors-bar:empty { display: none; }
+    .error-msg { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.8rem; margin-bottom: 0.4rem; }
+
+    table.data { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    table.data th { text-align: left; padding: 0.5rem 0.6rem; color: var(--text2); border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    table.data td { padding: 0.45rem 0.6rem; border-bottom: 1px solid rgba(71,85,105,0.3); }
+    table.data tr:hover td { background: rgba(99,102,241,0.05); }
+    .text-green { color: var(--green); }
+    .text-red { color: var(--red); }
+    .text-amber { color: var(--amber); }
+    .text-cyan { color: var(--cyan); }
+    .text-muted { color: var(--muted); }
+
+    .heatmap { display: grid; gap: 2px; font-size: 0.65rem; }
+    .heatmap-cell { padding: 0.3rem; text-align: center; border-radius: 4px; color: #fff; font-weight: 600; min-width: 45px; }
+    .heatmap-label { padding: 0.3rem; font-size: 0.65rem; color: var(--text2); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .news-item { padding: 0.75rem 0; border-bottom: 1px solid rgba(71,85,105,0.3); }
+    .news-item:last-child { border-bottom: none; }
+    .news-item .meta { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.25rem; }
+    .news-item .title { font-size: 0.85rem; font-weight: 500; }
+    .news-item .title a { color: var(--accent2); text-decoration: none; }
+    .news-item .title a:hover { text-decoration: underline; }
+    .news-item .summary { font-size: 0.8rem; color: var(--text2); margin-top: 0.25rem; }
+
+    .insight-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+    .insight { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+    .insight .insight-label { font-size: 0.7rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; }
+    .insight .insight-value { font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0; }
+    .insight .insight-detail { font-size: 0.75rem; color: var(--muted); }
+
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+    .empty-state .icon { font-size: 2rem; margin-bottom: 0.5rem; }
+
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+    .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
+    .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
+    .badge-amber { background: rgba(245,158,11,0.15); color: var(--amber); }
+
+    .loading-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
-  <h1>Polymarket Dashboard</h1>
-
-  <h2>Status</h2>
-  <div id="status" class="loading">Loading…</div>
-  <div id="errors" class="errors"></div>
-
-  <h2>Markets</h2>
-  <div id="markets" class="loading">Loading…</div>
-
-  <h2>Trades (price over time)</h2>
-  <div class="chart-wrap">
-    <canvas id="tradesChart"></canvas>
+  <div class="header">
+    <h1>Polymarket Analytics</h1>
+    <div class="header-controls">
+      <select id="marketFilter"><option value="">All Markets</option></select>
+      <button id="refreshBtn" onclick="D.toggleRefresh()" title="Auto-refresh every 30s">Auto</button>
+      <span class="updated" id="lastUpdated"></span>
+    </div>
   </div>
 
-  <script>
-    const api = '/api/v1';
+  <div id="errorsBar" class="errors-bar"></div>
 
-    async function loadStatus() {
-      const el = document.getElementById('status');
-      const errEl = document.getElementById('errors');
-      try {
-        const r = await fetch(api + '/status');
-        const d = await r.json();
-        const items = [
-          { label: 'db_ok', value: d.db_ok ? 'OK' : 'FAIL', ok: d.db_ok },
-          { label: 'markets', value: d.markets },
-          { label: 'trades', value: d.trades },
-          { label: 'orderbook', value: d.orderbook },
-          { label: 'features', value: d.features },
-          { label: 'signals', value: d.signals },
-        ];
-        el.innerHTML = '<div class="status-grid">' + items.map(i =>
-          '<div class="stat' + (i.ok === false ? ' fail' : i.ok === true ? ' ok' : '') + '">' +
-          '<span>' + i.label + '</span><strong>' + i.value + '</strong></div>'
-        ).join('') + '</div>';
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-card"><div class="label">Status</div><div class="value"><div class="loading-spinner"></div></div></div>
+  </div>
 
-        const errs = [
-          d.migration_error && 'Migration: ' + d.migration_error,
-          d.last_collect_error && 'Collect: ' + d.last_collect_error,
-          d.last_features_error && 'Features: ' + d.last_features_error,
-          d.last_ml_error && 'ML: ' + d.last_ml_error,
-          d.last_pipeline_error && 'Pipeline: ' + d.last_pipeline_error,
-          d.db_error && 'DB: ' + d.db_error
-        ].filter(Boolean);
-        errEl.innerHTML = errs.length ? errs.map(e => '<div>' + e + '</div>').join('') : '';
-      } catch (e) {
-        el.textContent = 'Error: ' + e.message;
+  <div class="tabs">
+    <button class="tab active" onclick="D.switchTab('overview')">Overview</button>
+    <button class="tab" onclick="D.switchTab('trading')">Trading</button>
+    <button class="tab" onclick="D.switchTab('technical')">Technical</button>
+    <button class="tab" onclick="D.switchTab('signals')">Signals</button>
+    <button class="tab" onclick="D.switchTab('performance')">Performance</button>
+    <button class="tab" onclick="D.switchTab('news')">News</button>
+  </div>
+
+  <!-- Overview Tab -->
+  <div id="tab-overview" class="tab-panel active">
+    <div class="grid-2">
+      <div class="card">
+        <h3><span class="dot" style="background:var(--accent)"></span> Price History</h3>
+        <div class="chart-wrap"><canvas id="overviewPrice"></canvas></div>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--green)"></span> Market Status</h3>
+        <div class="chart-wrap"><canvas id="settlementPie"></canvas></div>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--cyan)"></span> Volume by Market</h3>
+        <div class="chart-wrap"><canvas id="volumeByMarket"></canvas></div>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--violet)"></span> Signal Predictions</h3>
+        <div class="chart-wrap"><canvas id="signalTimeline"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trading Tab -->
+  <div id="tab-trading" class="tab-panel">
+    <div class="card full" style="margin-bottom:1rem">
+      <h3><span class="dot" style="background:var(--accent)"></span> Price &amp; Volume</h3>
+      <div class="chart-wrap tall"><canvas id="priceVolume"></canvas></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3><span class="dot" style="background:var(--green)"></span> Buy / Sell Distribution</h3>
+        <div class="chart-wrap"><canvas id="buySellDonut"></canvas></div>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--amber)"></span> Trade Statistics by Market</h3>
+        <div style="max-height:280px; overflow-y:auto" id="tradeStatsTable"></div>
+      </div>
+    </div>
+    <div class="card full" style="margin-top:1rem">
+      <h3><span class="dot" style="background:var(--pink)"></span> Price Distribution</h3>
+      <div class="chart-wrap"><canvas id="priceDistribution"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Technical Tab -->
+  <div id="tab-technical" class="tab-panel">
+    <div class="grid-2">
+      <div class="card">
+        <h3><span class="dot" style="background:var(--cyan)"></span> RSI (14-period)</h3>
+        <div class="chart-wrap"><canvas id="rsiChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--violet)"></span> MACD</h3>
+        <div class="chart-wrap"><canvas id="macdChart"></canvas></div>
+      </div>
+    </div>
+    <div class="card full" style="margin-top:1rem">
+      <h3><span class="dot" style="background:var(--accent)"></span> Feature Correlation Matrix</h3>
+      <div id="correlationMatrix" style="overflow-x:auto"></div>
+    </div>
+    <div class="card full" style="margin-top:1rem">
+      <h3><span class="dot" style="background:var(--green)"></span> Feature Summary</h3>
+      <div id="featureSummaryTable" style="overflow-x:auto"></div>
+    </div>
+  </div>
+
+  <!-- Signals Tab -->
+  <div id="tab-signals" class="tab-panel">
+    <div class="insight-cards" id="signalInsights"></div>
+    <div class="grid-2">
+      <div class="card">
+        <h3><span class="dot" style="background:var(--accent)"></span> Prediction Distribution</h3>
+        <div class="chart-wrap"><canvas id="signalDistChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--green)"></span> Signals by Market</h3>
+        <div class="chart-wrap"><canvas id="signalByMarket"></canvas></div>
+      </div>
+    </div>
+    <div class="card full" style="margin-top:1rem">
+      <h3><span class="dot" style="background:var(--cyan)"></span> Signal vs Price Overlay</h3>
+      <div class="chart-wrap tall"><canvas id="signalPriceOverlay"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Performance Tab -->
+  <div id="tab-performance" class="tab-panel">
+    <div class="insight-cards" id="pnlInsights"></div>
+    <div class="card full" style="margin-bottom:1rem">
+      <h3><span class="dot" style="background:var(--green)"></span> Cumulative P&amp;L</h3>
+      <div class="chart-wrap tall"><canvas id="pnlChart"></canvas></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3><span class="dot" style="background:var(--amber)"></span> Bid-Ask Spread Over Time</h3>
+        <div class="chart-wrap"><canvas id="spreadChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--violet)"></span> Profit by Market</h3>
+        <div class="chart-wrap"><canvas id="profitByMarket"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- News Tab -->
+  <div id="tab-news" class="tab-panel">
+    <div class="grid-2">
+      <div class="card" style="grid-column:1/-1">
+        <h3><span class="dot" style="background:var(--cyan)"></span> News Feed</h3>
+        <div id="newsFeed"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const API = '/api/v1';
+const COLORS = ['#6366f1','#22c55e','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6','#f97316','#a855f7'];
+
+const D = {
+  charts: {},
+  data: {},
+  refreshId: null,
+  currentTab: 'overview',
+
+  async init() {
+    await this.loadAll();
+    document.getElementById('marketFilter').addEventListener('change', () => this.onMarketChange());
+  },
+
+  async loadAll() {
+    const [status, markets, trades, signals, orderbook, analytics, news, features] = await Promise.all([
+      this.fetch('/status'), this.fetch('/markets?limit=200'), this.fetch('/trades?limit=500'),
+      this.fetch('/signals?limit=500'), this.fetch('/orderbook?limit=300'),
+      this.fetch('/analytics'), this.fetch('/news?limit=50'), this.fetch('/features?limit=1000'),
+    ]);
+    this.data = { status, markets, trades, signals, orderbook, analytics, news, features };
+    this.populateMarketFilter();
+    this.renderAll();
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  },
+
+  async fetch(path) {
+    try { const r = await fetch(API + path); return await r.json(); }
+    catch (e) { console.error('Fetch ' + path, e); return null; }
+  },
+
+  populateMarketFilter() {
+    const sel = document.getElementById('marketFilter');
+    const current = sel.value;
+    const opts = '<option value="">All Markets</option>';
+    const items = this.data.markets?.items || [];
+    sel.innerHTML = opts + items.map(m =>
+      '<option value="' + m.market_id + '"' + (m.market_id === current ? ' selected' : '') + '>' +
+      (m.question || m.market_id).substring(0, 60) + '</option>'
+    ).join('');
+  },
+
+  onMarketChange() {
+    this.renderAll();
+  },
+
+  getFilteredTrades() {
+    const mid = document.getElementById('marketFilter').value;
+    const items = (this.data.trades?.items || []).slice().reverse();
+    return mid ? items.filter(t => t.market_id === mid) : items;
+  },
+
+  getFilteredSignals() {
+    const mid = document.getElementById('marketFilter').value;
+    const items = (this.data.signals?.items || []).slice().reverse();
+    return mid ? items.filter(s => s.market_id === mid) : items;
+  },
+
+  getFilteredFeatures() {
+    const mid = document.getElementById('marketFilter').value;
+    const items = (this.data.features?.items || []).slice().reverse();
+    return mid ? items.filter(f => f.market_id === mid) : items;
+  },
+
+  renderAll() {
+    this.renderStatus();
+    this.renderErrors();
+    this.renderOverview();
+    this.renderTrading();
+    this.renderTechnical();
+    this.renderSignals();
+    this.renderPerformance();
+    this.renderNews();
+  },
+
+  renderStatus() {
+    const s = this.data.status;
+    const a = this.data.analytics;
+    if (!s) return;
+    const cards = [
+      { label: 'Database', value: s.db_ok ? 'OK' : 'FAIL', cls: s.db_ok ? 'ok' : 'bad' },
+      { label: 'Markets', value: this.fmtN(s.markets), sub: this.countSettled() },
+      { label: 'Trades', value: this.fmtN(s.trades), sub: a ? 'Vol: ' + this.fmtN(a.total_volume) : '' },
+      { label: 'Features', value: this.fmtN(s.features) },
+      { label: 'Signals', value: this.fmtN(s.signals), sub: a ? 'Avg: ' + (a.avg_prediction).toFixed(2) : '' },
+      { label: 'Orderbook', value: this.fmtN(s.orderbook), sub: a ? 'Spread: ' + a.avg_spread_bps.toFixed(0) + ' bps' : '' },
+      { label: 'News', value: this.fmtN(s.news) },
+      { label: 'P&L', value: a ? (a.total_profit >= 0 ? '+' : '') + a.total_profit.toFixed(2) : '—', cls: a && a.total_profit >= 0 ? 'ok' : a ? 'bad' : '' },
+    ];
+    document.getElementById('statsBar').innerHTML = cards.map(c =>
+      '<div class="stat-card ' + (c.cls || '') + '">' +
+      '<div class="label">' + c.label + '</div>' +
+      '<div class="value">' + c.value + '</div>' +
+      (c.sub ? '<div class="sub">' + c.sub + '</div>' : '') +
+      '</div>'
+    ).join('');
+  },
+
+  countSettled() {
+    const items = this.data.markets?.items || [];
+    const settled = items.filter(m => m.outcome_settled != null && m.outcome_settled !== false).length;
+    return settled + ' settled';
+  },
+
+  renderErrors() {
+    const s = this.data.status;
+    if (!s) return;
+    const errs = [
+      s.migration_error && 'Migration: ' + s.migration_error,
+      s.last_collect_error && 'Collector: ' + s.last_collect_error,
+      s.last_features_error && 'Features: ' + s.last_features_error,
+      s.last_ml_error && 'ML: ' + s.last_ml_error,
+      s.last_pipeline_error && 'Pipeline: ' + s.last_pipeline_error,
+      s.db_error && 'DB: ' + s.db_error,
+    ].filter(Boolean);
+    document.getElementById('errorsBar').innerHTML = errs.map(e => '<div class="error-msg">' + e + '</div>').join('');
+  },
+
+  // ====== OVERVIEW TAB ======
+  renderOverview() {
+    this.chartOverviewPrice();
+    this.chartSettlementPie();
+    this.chartVolumeByMarket();
+    this.chartSignalTimeline();
+  },
+
+  chartOverviewPrice() {
+    const trades = this.getFilteredTrades();
+    if (!trades.length) return this.emptyChart('overviewPrice');
+    const labels = trades.map(t => this.fmtDate(t.ts));
+    const data = trades.map(t => t.price);
+    this.makeChart('overviewPrice', 'line', {
+      labels, datasets: [{
+        label: 'Price', data, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)',
+        fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
+      }]
+    }, { scales: { x: { display: true, ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } } } });
+  },
+
+  chartSettlementPie() {
+    const items = this.data.markets?.items || [];
+    if (!items.length) return this.emptyChart('settlementPie');
+    const settled = items.filter(m => m.outcome_settled != null && m.outcome_settled !== false).length;
+    const active = items.length - settled;
+    this.makeChart('settlementPie', 'doughnut', {
+      labels: ['Active', 'Settled'],
+      datasets: [{ data: [active, settled], backgroundColor: ['#6366f1', '#22c55e'], borderWidth: 0 }]
+    }, { plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 15 } } } });
+  },
+
+  chartVolumeByMarket() {
+    const stats = this.data.analytics?.trade_stats || [];
+    if (!stats.length) return this.emptyChart('volumeByMarket');
+    const top = stats.slice(0, 8);
+    this.makeChart('volumeByMarket', 'bar', {
+      labels: top.map(s => (s.question || s.market_id).substring(0, 25)),
+      datasets: [{ label: 'Volume', data: top.map(s => s.total_volume), backgroundColor: COLORS.slice(0, 8), borderRadius: 4 }]
+    }, { indexAxis: 'y', scales: { x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } } } });
+  },
+
+  chartSignalTimeline() {
+    const signals = this.getFilteredSignals();
+    if (!signals.length) return this.emptyChart('signalTimeline');
+    this.makeChart('signalTimeline', 'line', {
+      labels: signals.map(s => this.fmtDate(s.ts)),
+      datasets: [{
+        label: 'Prediction', data: signals.map(s => s.prediction),
+        borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.1)',
+        fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
+      }]
+    }, { scales: { x: { ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { min: 0, max: 1, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } } } });
+  },
+
+  // ====== TRADING TAB ======
+  renderTrading() {
+    this.chartPriceVolume();
+    this.chartBuySell();
+    this.renderTradeStatsTable();
+    this.chartPriceDistribution();
+  },
+
+  chartPriceVolume() {
+    const trades = this.getFilteredTrades();
+    if (!trades.length) return this.emptyChart('priceVolume');
+    const labels = trades.map(t => this.fmtDate(t.ts));
+    this.makeChart('priceVolume', 'bar', {
+      labels,
+      datasets: [
+        {
+          type: 'line', label: 'Price', data: trades.map(t => t.price), yAxisID: 'yPrice',
+          borderColor: '#6366f1', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, order: 1,
+        },
+        {
+          label: 'Buy Vol', data: trades.map(t => t.side === 'buy' ? t.size : 0), yAxisID: 'yVol',
+          backgroundColor: 'rgba(34,197,94,0.4)', borderRadius: 2, order: 2,
+        },
+        {
+          label: 'Sell Vol', data: trades.map(t => t.side === 'sell' ? t.size : 0), yAxisID: 'yVol',
+          backgroundColor: 'rgba(239,68,68,0.4)', borderRadius: 2, order: 2,
+        },
+      ]
+    }, {
+      scales: {
+        x: { ticks: { maxTicksLimit: 12, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        yPrice: { position: 'left', ticks: { color: '#6366f1', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        yVol: { position: 'right', ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
       }
+    });
+  },
+
+  chartBuySell() {
+    const trades = this.getFilteredTrades();
+    if (!trades.length) return this.emptyChart('buySellDonut');
+    const buys = trades.filter(t => t.side === 'buy').length;
+    const sells = trades.filter(t => t.side === 'sell').length;
+    this.makeChart('buySellDonut', 'doughnut', {
+      labels: ['Buy (' + buys + ')', 'Sell (' + sells + ')'],
+      datasets: [{ data: [buys, sells], backgroundColor: ['#22c55e', '#ef4444'], borderWidth: 0 }]
+    }, { plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 15 } } } });
+  },
+
+  renderTradeStatsTable() {
+    const stats = this.data.analytics?.trade_stats || [];
+    const el = document.getElementById('tradeStatsTable');
+    if (!stats.length) { el.innerHTML = '<div class="empty-state">No trade data</div>'; return; }
+    el.innerHTML = '<table class="data"><thead><tr><th>Market</th><th>Trades</th><th>Volume</th><th>Avg Price</th><th>Buy%</th></tr></thead><tbody>' +
+      stats.map(s => {
+        const buyPct = s.trade_count > 0 ? ((s.buy_count / s.trade_count) * 100).toFixed(0) : '—';
+        const buyClass = buyPct > 55 ? 'text-green' : buyPct < 45 ? 'text-red' : '';
+        return '<tr><td title="' + (s.market_id) + '">' + (s.question || s.market_id).substring(0, 30) + '</td>' +
+          '<td>' + this.fmtN(s.trade_count) + '</td><td>' + this.fmtN(s.total_volume) + '</td>' +
+          '<td>' + s.avg_price.toFixed(3) + '</td><td class="' + buyClass + '">' + buyPct + '%</td></tr>';
+      }).join('') + '</tbody></table>';
+  },
+
+  chartPriceDistribution() {
+    const trades = this.getFilteredTrades();
+    if (!trades.length) return this.emptyChart('priceDistribution');
+    const prices = trades.map(t => t.price);
+    const min = Math.min(...prices), max = Math.max(...prices);
+    const bucketCount = 20;
+    const step = (max - min) / bucketCount || 0.05;
+    const buckets = Array(bucketCount).fill(0);
+    prices.forEach(p => {
+      const idx = Math.min(Math.floor((p - min) / step), bucketCount - 1);
+      buckets[idx]++;
+    });
+    const labels = buckets.map((_, i) => (min + i * step).toFixed(2));
+    this.makeChart('priceDistribution', 'bar', {
+      labels, datasets: [{ label: 'Count', data: buckets, backgroundColor: 'rgba(99,102,241,0.6)', borderRadius: 3 }]
+    }, { scales: { x: { ticks: { maxTicksLimit: 10, color: '#64748b', font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } } } });
+  },
+
+  // ====== TECHNICAL TAB ======
+  renderTechnical() {
+    this.chartRSI();
+    this.chartMACD();
+    this.renderCorrelationMatrix();
+    this.renderFeatureSummary();
+  },
+
+  chartRSI() {
+    const feats = this.getFilteredFeatures().filter(f => f.feature_name === 'rsi_14');
+    if (!feats.length) return this.emptyChart('rsiChart');
+    this.makeChart('rsiChart', 'line', {
+      labels: feats.map(f => this.fmtDate(f.ts)),
+      datasets: [
+        { label: 'RSI', data: feats.map(f => f.feature_value), borderColor: '#06b6d4', tension: 0.3, pointRadius: 0, borderWidth: 2, fill: false },
+        { label: 'Overbought (70)', data: feats.map(() => 70), borderColor: 'rgba(239,68,68,0.4)', borderDash: [5,5], pointRadius: 0, borderWidth: 1, fill: false },
+        { label: 'Oversold (30)', data: feats.map(() => 30), borderColor: 'rgba(34,197,94,0.4)', borderDash: [5,5], pointRadius: 0, borderWidth: 1, fill: false },
+      ]
+    }, {
+      scales: {
+        x: { ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        y: { min: 0, max: 100, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }
+      },
+      plugins: { legend: { labels: { color: '#94a3b8' } } }
+    });
+  },
+
+  chartMACD() {
+    const feats = this.getFilteredFeatures();
+    const macd = feats.filter(f => f.feature_name === 'macd');
+    const signal = feats.filter(f => f.feature_name === 'macd_signal');
+    const hist = feats.filter(f => f.feature_name === 'macd_hist');
+    if (!macd.length) return this.emptyChart('macdChart');
+
+    const tsSet = [...new Set(macd.map(f => f.ts))].sort();
+    const macdMap = Object.fromEntries(macd.map(f => [f.ts, f.feature_value]));
+    const sigMap = Object.fromEntries(signal.map(f => [f.ts, f.feature_value]));
+    const histMap = Object.fromEntries(hist.map(f => [f.ts, f.feature_value]));
+
+    this.makeChart('macdChart', 'bar', {
+      labels: tsSet.map(t => this.fmtDate(t)),
+      datasets: [
+        { type: 'line', label: 'MACD', data: tsSet.map(t => macdMap[t] || 0), borderColor: '#8b5cf6', pointRadius: 0, borderWidth: 2, order: 1 },
+        { type: 'line', label: 'Signal', data: tsSet.map(t => sigMap[t] || 0), borderColor: '#f59e0b', pointRadius: 0, borderWidth: 2, borderDash: [4,4], order: 1 },
+        { label: 'Histogram', data: tsSet.map(t => histMap[t] || 0), backgroundColor: tsSet.map(t => (histMap[t] || 0) >= 0 ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.5)'), borderRadius: 2, order: 2 },
+      ]
+    }, {
+      scales: {
+        x: { ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }
+      },
+      plugins: { legend: { labels: { color: '#94a3b8' } } }
+    });
+  },
+
+  renderCorrelationMatrix() {
+    const corrs = this.data.analytics?.feature_correlations || [];
+    const el = document.getElementById('correlationMatrix');
+    if (!corrs.length) { el.innerHTML = '<div class="empty-state">No correlation data available</div>'; return; }
+
+    const names = [...new Set(corrs.flatMap(c => [c.feature_1, c.feature_2]))].sort();
+    const map = {};
+    corrs.forEach(c => { map[c.feature_1 + '|' + c.feature_2] = c.correlation; map[c.feature_2 + '|' + c.feature_1] = c.correlation; });
+
+    const cols = names.length + 1;
+    let html = '<div class="heatmap" style="grid-template-columns: 80px repeat(' + names.length + ', 1fr)">';
+    html += '<div class="heatmap-label"></div>' + names.map(n => '<div class="heatmap-label" title="' + n + '">' + this.shortName(n) + '</div>').join('');
+    names.forEach(r => {
+      html += '<div class="heatmap-label" title="' + r + '">' + this.shortName(r) + '</div>';
+      names.forEach(c => {
+        const v = r === c ? 1.0 : (map[r + '|' + c] ?? 0);
+        html += '<div class="heatmap-cell" style="background:' + this.corrColor(v) + '" title="' + r + ' vs ' + c + ': ' + v.toFixed(3) + '">' + v.toFixed(2) + '</div>';
+      });
+    });
+    html += '</div>';
+
+    const strong = corrs.filter(c => Math.abs(c.correlation) > 0.5).sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation));
+    if (strong.length) {
+      html += '<div style="margin-top:1rem"><h4 style="font-size:0.8rem;color:var(--text2);margin-bottom:0.5rem">Key Correlations (|r| > 0.5)</h4>';
+      html += strong.slice(0, 10).map(c => {
+        const cls = c.correlation > 0 ? 'text-green' : 'text-red';
+        const dir = c.correlation > 0 ? 'positive' : 'negative';
+        return '<div style="font-size:0.8rem;margin:0.25rem 0"><span class="' + cls + '">' + c.correlation.toFixed(3) + '</span> ' +
+          c.feature_1 + ' &harr; ' + c.feature_2 + ' <span class="text-muted">(' + dir + ')</span></div>';
+      }).join('');
+      html += '</div>';
     }
+    el.innerHTML = html;
+  },
 
-    async function loadMarkets() {
-      const el = document.getElementById('markets');
-      try {
-        const r = await fetch(api + '/markets?limit=50');
-        const d = await r.json();
-        if (!d.items || d.items.length === 0) {
-          el.innerHTML = '<p>No markets</p>';
-          return;
-        }
-        el.innerHTML = '<table><thead><tr><th>Question</th><th>End date</th><th>Settled</th></tr></thead><tbody>' +
-          d.items.map(m => '<tr><td>' + (m.question || m.market_id || '-') + '</td><td>' +
-            (m.end_date ? new Date(m.end_date).toLocaleString() : '-') + '</td><td>' +
-            (m.outcome_settled != null ? m.outcome_settled : '-') + '</td></tr>').join('') +
-          '</tbody></table>';
-      } catch (e) {
-        el.textContent = 'Error: ' + e.message;
-      }
+  renderFeatureSummary() {
+    const summary = this.data.analytics?.feature_summary || [];
+    const el = document.getElementById('featureSummaryTable');
+    if (!summary.length) { el.innerHTML = '<div class="empty-state">No feature data</div>'; return; }
+    el.innerHTML = '<table class="data"><thead><tr><th>Feature</th><th>Mean</th><th>Min</th><th>Max</th><th>Range</th><th>Count</th></tr></thead><tbody>' +
+      summary.map(f => {
+        const range = (f.max - f.min).toFixed(4);
+        return '<tr><td>' + f.name + '</td><td>' + f.mean.toFixed(4) + '</td><td class="text-cyan">' + f.min.toFixed(4) +
+          '</td><td class="text-amber">' + f.max.toFixed(4) + '</td><td>' + range + '</td><td>' + f.count + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  },
+
+  // ====== SIGNALS TAB ======
+  renderSignals() {
+    this.renderSignalInsights();
+    this.chartSignalDistribution();
+    this.chartSignalByMarket();
+    this.chartSignalPriceOverlay();
+  },
+
+  renderSignalInsights() {
+    const signals = this.getFilteredSignals();
+    const a = this.data.analytics;
+    const el = document.getElementById('signalInsights');
+    if (!signals.length) { el.innerHTML = ''; return; }
+
+    const preds = signals.map(s => s.prediction);
+    const avg = preds.reduce((a, b) => a + b, 0) / preds.length;
+    const std = Math.sqrt(preds.reduce((s, p) => s + (p - avg) ** 2, 0) / preds.length);
+    const bullish = preds.filter(p => p > 0.6).length;
+    const bearish = preds.filter(p => p < 0.4).length;
+    const neutral = preds.length - bullish - bearish;
+
+    el.innerHTML = [
+      { label: 'Avg Prediction', value: avg.toFixed(3), detail: 'std: ' + std.toFixed(3), cls: avg > 0.5 ? 'text-green' : 'text-red' },
+      { label: 'Bullish Signals', value: bullish, detail: ((bullish/preds.length)*100).toFixed(0) + '% of total', cls: 'text-green' },
+      { label: 'Bearish Signals', value: bearish, detail: ((bearish/preds.length)*100).toFixed(0) + '% of total', cls: 'text-red' },
+      { label: 'Neutral Signals', value: neutral, detail: ((neutral/preds.length)*100).toFixed(0) + '% of total', cls: 'text-amber' },
+    ].map(c =>
+      '<div class="insight"><div class="insight-label">' + c.label + '</div>' +
+      '<div class="insight-value ' + c.cls + '">' + c.value + '</div>' +
+      '<div class="insight-detail">' + c.detail + '</div></div>'
+    ).join('');
+  },
+
+  chartSignalDistribution() {
+    const dist = this.data.analytics?.signal_distribution || [];
+    if (!dist.length) return this.emptyChart('signalDistChart');
+    this.makeChart('signalDistChart', 'bar', {
+      labels: dist.map(d => d.bucket.toFixed(1)),
+      datasets: [{
+        label: 'Count', data: dist.map(d => d.count),
+        backgroundColor: dist.map(d => d.bucket >= 0.5 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'),
+        borderRadius: 4,
+      }]
+    }, { scales: { x: { title: { display: true, text: 'Prediction', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } }, y: { title: { display: true, text: 'Count', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } } } });
+  },
+
+  chartSignalByMarket() {
+    const stats = this.data.analytics?.trade_stats || [];
+    const signals = this.data.signals?.items || [];
+    if (!signals.length) return this.emptyChart('signalByMarket');
+
+    const byMarket = {};
+    signals.forEach(s => {
+      if (!byMarket[s.market_id]) byMarket[s.market_id] = { sum: 0, count: 0 };
+      byMarket[s.market_id].sum += s.prediction;
+      byMarket[s.market_id].count++;
+    });
+    const entries = Object.entries(byMarket).map(([mid, v]) => ({
+      mid, avg: v.sum / v.count, count: v.count,
+      label: (stats.find(s => s.market_id === mid)?.question || mid).substring(0, 25),
+    })).sort((a, b) => b.count - a.count).slice(0, 8);
+
+    this.makeChart('signalByMarket', 'bar', {
+      labels: entries.map(e => e.label),
+      datasets: [{ label: 'Avg Prediction', data: entries.map(e => e.avg), backgroundColor: entries.map(e => e.avg >= 0.5 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'), borderRadius: 4 }]
+    }, { indexAxis: 'y', scales: { x: { min: 0, max: 1, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } } } });
+  },
+
+  chartSignalPriceOverlay() {
+    const trades = this.getFilteredTrades();
+    const signals = this.getFilteredSignals();
+    if (!trades.length && !signals.length) return this.emptyChart('signalPriceOverlay');
+
+    const datasets = [];
+    if (trades.length) {
+      datasets.push({
+        label: 'Price', data: trades.map(t => ({ x: new Date(t.ts).getTime(), y: t.price })),
+        borderColor: '#6366f1', pointRadius: 0, borderWidth: 2, tension: 0.3, yAxisID: 'yPrice', showLine: true,
+      });
     }
-
-    let chartInstance = null;
-    async function loadTradesChart() {
-      try {
-        const r = await fetch(api + '/trades?limit=200');
-        const d = await r.json();
-        const items = (d.items || []).slice().reverse();
-        const labels = items.length ? items.map(t => t.ts ? new Date(t.ts).toLocaleString() : '') : [];
-        const data = items.length ? items.map(t => t.price) : [];
-
-        if (chartInstance) chartInstance.destroy();
-        chartInstance = new Chart(document.getElementById('tradesChart'), {
-          type: 'line',
-          data: { labels, datasets: [{ label: 'Price', data, borderColor: '#2563eb', fill: false }] },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { ticks: { maxTicksLimit: 12 } },
-              y: { beginAtZero: false }
-            }
-          }
-        });
-      } catch (e) {
-        document.getElementById('tradesChart').parentElement.innerHTML = '<p>Error: ' + e.message + '</p>';
-      }
+    if (signals.length) {
+      datasets.push({
+        label: 'Signal', data: signals.map(s => ({ x: new Date(s.ts).getTime(), y: s.prediction })),
+        borderColor: '#f59e0b', pointRadius: 1.5, borderWidth: 1.5, tension: 0.3, yAxisID: 'ySignal', showLine: true,
+      });
     }
+    this.makeChart('signalPriceOverlay', 'scatter', { datasets }, {
+      scales: {
+        x: { type: 'linear', ticks: { callback: v => new Date(v).toLocaleDateString(), maxTicksLimit: 10, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        yPrice: { position: 'left', title: { display: true, text: 'Price', color: '#6366f1' }, ticks: { color: '#6366f1', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        ySignal: { position: 'right', min: 0, max: 1, title: { display: true, text: 'Signal', color: '#f59e0b' }, ticks: { color: '#f59e0b', font: { size: 10 } }, grid: { display: false } },
+      },
+      plugins: { legend: { labels: { color: '#94a3b8' } } }
+    });
+  },
 
-    loadStatus();
-    loadMarkets();
-    loadTradesChart();
-  </script>
+  // ====== PERFORMANCE TAB ======
+  renderPerformance() {
+    this.renderPnlInsights();
+    this.chartPnL();
+    this.chartSpread();
+    this.chartProfitByMarket();
+  },
+
+  renderPnlInsights() {
+    const pnl = this.data.analytics?.pnl_timeline || [];
+    const el = document.getElementById('pnlInsights');
+    if (!pnl.length) { el.innerHTML = '<div class="insight"><div class="insight-label">P&L</div><div class="insight-value text-muted">No data</div></div>'; return; }
+
+    const profits = pnl.map(p => p.profit);
+    const total = profits.reduce((a, b) => a + b, 0);
+    const wins = profits.filter(p => p > 0).length;
+    const losses = profits.filter(p => p < 0).length;
+    const winRate = profits.length > 0 ? (wins / profits.length * 100) : 0;
+    const maxProfit = Math.max(...profits);
+    const maxLoss = Math.min(...profits);
+    const avgProfit = wins > 0 ? profits.filter(p => p > 0).reduce((a, b) => a + b, 0) / wins : 0;
+    const avgLoss = losses > 0 ? profits.filter(p => p < 0).reduce((a, b) => a + b, 0) / losses : 0;
+    const profitFactor = avgLoss !== 0 ? Math.abs(avgProfit / avgLoss) : 0;
+
+    el.innerHTML = [
+      { label: 'Total P&L', value: (total >= 0 ? '+' : '') + total.toFixed(2), cls: total >= 0 ? 'text-green' : 'text-red' },
+      { label: 'Win Rate', value: winRate.toFixed(0) + '%', detail: wins + 'W / ' + losses + 'L', cls: winRate >= 50 ? 'text-green' : 'text-red' },
+      { label: 'Best Trade', value: '+' + maxProfit.toFixed(2), cls: 'text-green' },
+      { label: 'Worst Trade', value: maxLoss.toFixed(2), cls: 'text-red' },
+      { label: 'Profit Factor', value: profitFactor.toFixed(2), detail: 'avg win / avg loss', cls: profitFactor >= 1 ? 'text-green' : 'text-red' },
+    ].map(c =>
+      '<div class="insight"><div class="insight-label">' + c.label + '</div>' +
+      '<div class="insight-value ' + c.cls + '">' + c.value + '</div>' +
+      (c.detail ? '<div class="insight-detail">' + c.detail + '</div>' : '') + '</div>'
+    ).join('');
+  },
+
+  chartPnL() {
+    const pnl = this.data.analytics?.pnl_timeline || [];
+    if (!pnl.length) return this.emptyChart('pnlChart');
+    this.makeChart('pnlChart', 'line', {
+      labels: pnl.map(p => this.fmtDate(p.ts)),
+      datasets: [
+        {
+          label: 'Cumulative P&L', data: pnl.map(p => p.cumulative),
+          borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)',
+          fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
+        },
+        {
+          label: 'Per-Trade P&L', data: pnl.map(p => p.profit), type: 'bar',
+          backgroundColor: pnl.map(p => p.profit >= 0 ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'),
+          borderRadius: 2, yAxisID: 'yTrade',
+        },
+      ]
+    }, {
+      scales: {
+        x: { ticks: { maxTicksLimit: 12, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        y: { position: 'left', title: { display: true, text: 'Cumulative', color: '#22c55e' }, ticks: { color: '#22c55e', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        yTrade: { position: 'right', title: { display: true, text: 'Per Trade', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+      },
+      plugins: { legend: { labels: { color: '#94a3b8' } } }
+    });
+  },
+
+  chartSpread() {
+    const spread = (this.data.analytics?.spread_timeline || []).slice().reverse();
+    if (!spread.length) return this.emptyChart('spreadChart');
+    this.makeChart('spreadChart', 'line', {
+      labels: spread.map(s => this.fmtDate(s.ts)),
+      datasets: [{
+        label: 'Spread (bps)', data: spread.map(s => s.spread_bps),
+        borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)',
+        fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
+      }]
+    }, { scales: { x: { ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { title: { display: true, text: 'Basis Points', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } } } });
+  },
+
+  chartProfitByMarket() {
+    const pnl = this.data.analytics?.pnl_timeline || [];
+    if (!pnl.length) return this.emptyChart('profitByMarket');
+    const byMarket = {};
+    pnl.forEach(p => { byMarket[p.market_id] = (byMarket[p.market_id] || 0) + p.profit; });
+    const entries = Object.entries(byMarket).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const stats = this.data.analytics?.trade_stats || [];
+    this.makeChart('profitByMarket', 'bar', {
+      labels: entries.map(([mid]) => (stats.find(s => s.market_id === mid)?.question || mid).substring(0, 25)),
+      datasets: [{ label: 'Profit', data: entries.map(([, v]) => v), backgroundColor: entries.map(([, v]) => v >= 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'), borderRadius: 4 }]
+    }, { indexAxis: 'y', scales: { x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } } } });
+  },
+
+  // ====== NEWS TAB ======
+  renderNews() {
+    const news = this.data.news?.items || [];
+    const el = document.getElementById('newsFeed');
+    if (!news.length) { el.innerHTML = '<div class="empty-state"><div class="icon">&#128240;</div>No news collected yet</div>'; return; }
+    el.innerHTML = news.map(n =>
+      '<div class="news-item">' +
+      '<div class="meta"><span class="badge badge-amber">' + (n.source || 'unknown') + '</span> &middot; ' + new Date(n.ts).toLocaleString() + '</div>' +
+      '<div class="title">' + (n.link ? '<a href="' + n.link + '" target="_blank">' + (n.title || 'Untitled') + '</a>' : (n.title || 'Untitled')) + '</div>' +
+      (n.summary ? '<div class="summary">' + n.summary + '</div>' : '') +
+      '</div>'
+    ).join('');
+  },
+
+  // ====== HELPERS ======
+  switchTab(tab) {
+    this.currentTab = tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.textContent.toLowerCase().includes(tab)));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+  },
+
+  toggleRefresh() {
+    const btn = document.getElementById('refreshBtn');
+    if (this.refreshId) {
+      clearInterval(this.refreshId);
+      this.refreshId = null;
+      btn.classList.remove('active');
+    } else {
+      this.refreshId = setInterval(() => this.loadAll(), 30000);
+      btn.classList.add('active');
+    }
+  },
+
+  makeChart(id, type, data, extraOpts) {
+    if (this.charts[id]) this.charts[id].destroy();
+    const ctx = document.getElementById(id);
+    if (!ctx) return;
+    const opts = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: (data.datasets || []).length > 1, labels: { color: '#94a3b8', boxWidth: 12, padding: 10 } } },
+      animation: { duration: 400 },
+      ...extraOpts,
+    };
+    this.charts[id] = new Chart(ctx, { type, data, options: opts });
+  },
+
+  emptyChart(id) {
+    if (this.charts[id]) { this.charts[id].destroy(); delete this.charts[id]; }
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    if (!parent.querySelector('.empty-state')) {
+      const div = document.createElement('div');
+      div.className = 'empty-state';
+      div.innerHTML = '<div class="icon">&#128202;</div>No data available';
+      div.style.position = 'absolute';
+      div.style.inset = '0';
+      div.style.display = 'flex';
+      div.style.flexDirection = 'column';
+      div.style.alignItems = 'center';
+      div.style.justifyContent = 'center';
+      parent.style.position = 'relative';
+      parent.appendChild(div);
+    }
+  },
+
+  corrColor(v) {
+    if (v >= 0.7) return 'rgba(34,197,94,0.8)';
+    if (v >= 0.3) return 'rgba(34,197,94,0.4)';
+    if (v >= 0.1) return 'rgba(34,197,94,0.2)';
+    if (v > -0.1) return 'rgba(71,85,105,0.3)';
+    if (v > -0.3) return 'rgba(239,68,68,0.2)';
+    if (v > -0.7) return 'rgba(239,68,68,0.4)';
+    return 'rgba(239,68,68,0.8)';
+  },
+
+  shortName(n) {
+    const map = { volatility_1h: 'vol_1h', macd_signal: 'macd_s', macd_hist: 'macd_h', volume_1h: 'vol1h', volume_5m: 'vol5m', spread_bps: 'sp_bps', mid_price: 'mid_p' };
+    return map[n] || n;
+  },
+
+  fmtN(n) {
+    if (n == null) return '—';
+    if (typeof n === 'number' && n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return String(n);
+  },
+
+  fmtDate(d) {
+    if (!d) return '';
+    const dt = new Date(d);
+    return dt.toLocaleDateString('en', { month: 'short', day: 'numeric' }) + ' ' + dt.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' });
+  },
+};
+
+D.init();
+</script>
 </body>
 </html>

@@ -74,6 +74,74 @@ class SignalsList(BaseModel):
     total: int
 
 
+class FeatureOut(BaseModel):
+    """Feature row response model."""
+
+    id: int
+    market_id: str
+    ts: datetime
+    feature_name: str
+    feature_value: float
+
+
+class FeaturesList(BaseModel):
+    """Paginated features response."""
+
+    items: list[FeatureOut]
+    total: int
+
+
+class NewsOut(BaseModel):
+    """News item response model."""
+
+    id: int
+    ts: datetime
+    source: str
+    title: str | None = None
+    link: str | None = None
+    summary: str | None = None
+
+
+class NewsList(BaseModel):
+    """Paginated news response."""
+
+    items: list[NewsOut]
+    total: int
+
+
+class ResultOut(BaseModel):
+    """Backtest result response model."""
+
+    id: int
+    ts: datetime
+    market_id: str
+    profit: float
+    run_id: str | None = None
+
+
+class ResultsList(BaseModel):
+    """Paginated results response."""
+
+    items: list[ResultOut]
+    total: int
+
+
+class AnalyticsOut(BaseModel):
+    """Aggregated analytics for dashboard."""
+
+    trade_stats: list[dict] = []
+    feature_summary: list[dict] = []
+    signal_distribution: list[dict] = []
+    feature_correlations: list[dict] = []
+    pnl_timeline: list[dict] = []
+    spread_timeline: list[dict] = []
+    total_profit: float = 0.0
+    total_trades: int = 0
+    total_volume: float = 0.0
+    avg_spread_bps: float = 0.0
+    avg_prediction: float = 0.0
+
+
 class StatusOut(BaseModel):
     """Status response."""
 

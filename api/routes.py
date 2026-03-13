@@ -3,11 +3,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from collections import defaultdict
+
 from api.schemas import (
+    AnalyticsOut,
+    FeatureOut,
+    FeaturesList,
     MarketOut,
     MarketsList,
+    NewsList,
+    NewsOut,
     OrderbookList,
     OrderbookOut,
+    ResultOut,
+    ResultsList,
     SignalOut,
     SignalsList,
     StatusOut,
@@ -251,3 +260,292 @@ def list_signals(
 def get_status():
     """Get DB status and pipeline error info."""
     return _get_status_response()
+
+
+def _get_features(session: Session, market_id: str | None, limit: int = 500, offset: int = 0) -> FeaturesList:
+    limit, offset = _clamp_pagination(limit, offset)
+    if market_id:
+        total = session.execute(
+            text("SELECT COUNT(*) FROM features WHERE market_id = :m"), {"m": market_id},
+        ).scalar() or 0
+        rows = session.execute(
+            text(
+                "SELECT id, market_id, ts, feature_name, feature_value "
+                "FROM features WHERE market_id = :m ORDER BY ts DESC LIMIT :lim OFFSET :off"
+            ),
+            {"m": market_id, "lim": limit, "off": offset},
+        ).fetchall()
+    else:
+        total = session.execute(text("SELECT COUNT(*) FROM features")).scalar() or 0
+        rows = session.execute(
+            text(
+                "SELECT id, market_id, ts, feature_name, feature_value "
+                "FROM features ORDER BY ts DESC LIMIT :lim OFFSET :off"
+            ),
+            {"lim": limit, "off": offset},
+        ).fetchall()
+    items = [
+        FeatureOut(
+            id=r[0], market_id=r[1], ts=r[2],
+            feature_name=r[3], feature_value=_safe_float(r[4]),
+        )
+        for r in rows
+    ]
+    return FeaturesList(items=items, total=total)
+
+
+def _get_news(session: Session, limit: int = 50, offset: int = 0) -> NewsList:
+    limit, offset = _clamp_pagination(limit, offset)
+    total = session.execute(text("SELECT COUNT(*) FROM news")).scalar() or 0
+    rows = session.execute(
+        text(
+            "SELECT id, ts, source, title, link, summary "
+            "FROM news ORDER BY ts DESC LIMIT :lim OFFSET :off"
+        ),
+        {"lim": limit, "off": offset},
+    ).fetchall()
+    items = [
+        NewsOut(id=r[0], ts=r[1], source=r[2], title=r[3], link=r[4], summary=r[5])
+        for r in rows
+    ]
+    return NewsList(items=items, total=total)
+
+
+def _get_results(session: Session, market_id: str | None, limit: int = 200, offset: int = 0) -> ResultsList:
+    limit, offset = _clamp_pagination(limit, offset)
+    if market_id:
+        total = session.execute(
+            text("SELECT COUNT(*) FROM results WHERE market_id = :m"), {"m": market_id},
+        ).scalar() or 0
+        rows = session.execute(
+            text(
+                "SELECT id, ts, market_id, profit, run_id "
+                "FROM results WHERE market_id = :m ORDER BY ts LIMIT :lim OFFSET :off"
+            ),
+            {"m": market_id, "lim": limit, "off": offset},
+        ).fetchall()
+    else:
+        total = session.execute(text("SELECT COUNT(*) FROM results")).scalar() or 0
+        rows = session.execute(
+            text(
+                "SELECT id, ts, market_id, profit, run_id "
+                "FROM results ORDER BY ts LIMIT :lim OFFSET :off"
+            ),
+            {"lim": limit, "off": offset},
+        ).fetchall()
+    items = [
+        ResultOut(id=r[0], ts=r[1], market_id=r[2], profit=_safe_float(r[3]), run_id=r[4])
+        for r in rows
+    ]
+    return ResultsList(items=items, total=total)
+
+
+def _pearson(x: list[float], y: list[float]) -> float:
+    """Compute Pearson correlation coefficient without numpy."""
+    n = len(x)
+    if n < 3:
+        return 0.0
+    mx = sum(x) / n
+    my = sum(y) / n
+    cov = sum((xi - mx) * (yi - my) for xi, yi in zip(x, y))
+    sx = sum((xi - mx) ** 2 for xi in x) ** 0.5
+    sy = sum((yi - my) ** 2 for yi in y) ** 0.5
+    if sx == 0 or sy == 0:
+        return 0.0
+    return cov / (sx * sy)
+
+
+def _get_analytics(session: Session) -> AnalyticsOut:
+    result = AnalyticsOut()
+
+    try:
+        rows = session.execute(text(
+            "SELECT t.market_id, m.question, "
+            "COUNT(*) as trade_count, "
+            "COALESCE(SUM(t.size), 0) as total_volume, "
+            "COALESCE(AVG(t.price), 0) as avg_price, "
+            "SUM(CASE WHEN t.side = 'buy' THEN 1 ELSE 0 END) as buy_count, "
+            "SUM(CASE WHEN t.side = 'sell' THEN 1 ELSE 0 END) as sell_count "
+            "FROM trades t "
+            "LEFT JOIN markets m ON t.market_id = m.market_id "
+            "GROUP BY t.market_id, m.question "
+            "ORDER BY trade_count DESC LIMIT 20"
+        )).fetchall()
+        result.trade_stats = [
+            {
+                "market_id": r[0], "question": r[1], "trade_count": r[2],
+                "total_volume": round(_safe_float(r[3]), 4),
+                "avg_price": round(_safe_float(r[4]), 4),
+                "buy_count": r[5], "sell_count": r[6],
+            }
+            for r in rows
+        ]
+    except Exception:
+        pass
+
+    try:
+        rows = session.execute(text(
+            "SELECT feature_name, AVG(feature_value), MIN(feature_value), "
+            "MAX(feature_value), COUNT(*) "
+            "FROM features GROUP BY feature_name ORDER BY feature_name"
+        )).fetchall()
+        result.feature_summary = [
+            {
+                "name": r[0],
+                "mean": round(_safe_float(r[1]), 6),
+                "min": round(_safe_float(r[2]), 6),
+                "max": round(_safe_float(r[3]), 6),
+                "count": r[4],
+            }
+            for r in rows
+        ]
+    except Exception:
+        pass
+
+    try:
+        rows = session.execute(text(
+            "SELECT ROUND(prediction, 1) as bucket, COUNT(*) "
+            "FROM signals GROUP BY bucket ORDER BY bucket"
+        )).fetchall()
+        result.signal_distribution = [
+            {"bucket": _safe_float(r[0]), "count": r[1]} for r in rows
+        ]
+    except Exception:
+        pass
+
+    try:
+        rows = session.execute(text(
+            "SELECT ts, (ask_price - bid_price) as spread, "
+            "CASE WHEN (ask_price + bid_price) > 0 "
+            "THEN (ask_price - bid_price) / ((ask_price + bid_price) / 2.0) * 10000 "
+            "ELSE 0 END as spread_bps "
+            "FROM orderbook ORDER BY ts DESC LIMIT 200"
+        )).fetchall()
+        result.spread_timeline = [
+            {
+                "ts": str(r[0]),
+                "spread": round(_safe_float(r[1]), 6),
+                "spread_bps": round(_safe_float(r[2]), 2),
+            }
+            for r in rows
+        ]
+    except Exception:
+        pass
+
+    try:
+        rows = session.execute(text(
+            "SELECT ts, market_id, profit FROM results ORDER BY ts LIMIT 500"
+        )).fetchall()
+        cumulative = 0.0
+        pnl = []
+        for r in rows:
+            cumulative += _safe_float(r[2])
+            pnl.append({
+                "ts": str(r[0]), "market_id": r[1],
+                "profit": round(_safe_float(r[2]), 4),
+                "cumulative": round(cumulative, 4),
+            })
+        result.pnl_timeline = pnl
+    except Exception:
+        pass
+
+    try:
+        result.total_trades = session.execute(text("SELECT COUNT(*) FROM trades")).scalar() or 0
+    except Exception:
+        pass
+    try:
+        result.total_volume = round(
+            _safe_float(session.execute(text("SELECT COALESCE(SUM(size), 0) FROM trades")).scalar()), 4
+        )
+    except Exception:
+        pass
+    try:
+        result.total_profit = round(
+            _safe_float(session.execute(text("SELECT COALESCE(SUM(profit), 0) FROM results")).scalar()), 4
+        )
+    except Exception:
+        pass
+    try:
+        result.avg_prediction = round(
+            _safe_float(session.execute(text("SELECT COALESCE(AVG(prediction), 0) FROM signals")).scalar()), 4
+        )
+    except Exception:
+        pass
+    try:
+        result.avg_spread_bps = round(
+            _safe_float(session.execute(text(
+                "SELECT COALESCE(AVG("
+                "CASE WHEN (ask_price + bid_price) > 0 "
+                "THEN (ask_price - bid_price) / ((ask_price + bid_price) / 2.0) * 10000 "
+                "ELSE 0 END), 0) FROM orderbook"
+            )).scalar()), 2
+        )
+    except Exception:
+        pass
+
+    try:
+        feat_rows = session.execute(text(
+            "SELECT market_id, ts, feature_name, feature_value "
+            "FROM features ORDER BY market_id, ts LIMIT 5000"
+        )).fetchall()
+        points: dict[tuple[str, str], dict[str, float]] = defaultdict(dict)
+        for r in feat_rows:
+            points[(r[0], str(r[1]))][r[2]] = _safe_float(r[3])
+        all_features = sorted({fn for pt in points.values() for fn in pt})
+        correlations = []
+        for i, f1 in enumerate(all_features):
+            for f2 in all_features[i + 1:]:
+                v1, v2 = [], []
+                for pt in points.values():
+                    if f1 in pt and f2 in pt:
+                        v1.append(pt[f1])
+                        v2.append(pt[f2])
+                if len(v1) >= 5:
+                    corr = _pearson(v1, v2)
+                    correlations.append({
+                        "feature_1": f1, "feature_2": f2,
+                        "correlation": round(corr, 3),
+                    })
+        result.feature_correlations = correlations
+    except Exception:
+        pass
+
+    return result
+
+
+@router.get("/features", response_model=FeaturesList)
+def list_features(
+    market_id: str | None = None,
+    session: Session = Depends(get_db),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+):
+    """List computed features, optionally filtered by market_id."""
+    return _get_features(session, market_id=market_id, limit=limit, offset=offset)
+
+
+@router.get("/news", response_model=NewsList)
+def list_news(
+    session: Session = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+):
+    """List news items."""
+    return _get_news(session, limit=limit, offset=offset)
+
+
+@router.get("/results", response_model=ResultsList)
+def list_results(
+    market_id: str | None = None,
+    session: Session = Depends(get_db),
+    limit: int = Query(default=200, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+):
+    """List backtest results, optionally filtered by market_id."""
+    return _get_results(session, market_id=market_id, limit=limit, offset=offset)
+
+
+@router.get("/analytics", response_model=AnalyticsOut)
+def get_analytics(session: Session = Depends(get_db)):
+    """Computed analytics: trade stats, feature correlations, signal distribution, PnL."""
+    return _get_analytics(session)
