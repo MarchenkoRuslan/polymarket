@@ -147,6 +147,7 @@ async def collect_from_api():
     except Exception as e:
         session.rollback()
         logger.exception("Collect error: %s", e)
+        raise
     finally:
         await client.close()
         session.close()

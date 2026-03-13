@@ -138,6 +138,14 @@ def _get_status():
 
 
 def main():
+    import sys
+
+    # Ensure 'import server' in submodules returns this module, not a second copy.
+    # Without this, `python server.py` loads as __main__, and `from server import ...`
+    # in api/routes.py creates a separate module with its own globals —
+    # pipeline errors would never appear in /api/v1/status.
+    sys.modules.setdefault("server", sys.modules[__name__])
+
     logging.basicConfig(level=logging.INFO)
     init_db()
     t = threading.Thread(target=pipeline_loop, daemon=True)

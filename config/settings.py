@@ -7,10 +7,12 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # Database
-DATABASE_URL = os.getenv(
+# Railway (and some other PaaS) may provide postgres:// which SQLAlchemy 2.0 rejects
+_raw_db_url = os.getenv(
     "DATABASE_URL",
     "postgresql://polymarket:polymarket@localhost:5432/polymarket"
 )
+DATABASE_URL = _raw_db_url.replace("postgres://", "postgresql://", 1) if _raw_db_url else _raw_db_url
 
 # Polymarket API
 POLYMARKET_CLOB_API = os.getenv("POLYMARKET_CLOB_API", "https://clob.polymarket.com")
