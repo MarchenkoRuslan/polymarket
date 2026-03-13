@@ -113,14 +113,14 @@
     <div class="stat-card"><div class="label">Status</div><div class="value"><div class="loading-spinner"></div></div></div>
   </div>
 
-  <div class="tabs">
-    <button class="tab active" onclick="D.switchTab('overview')">Overview</button>
-    <button class="tab" onclick="D.switchTab('trading')">Trading</button>
-    <button class="tab" onclick="D.switchTab('technical')">Technical</button>
-    <button class="tab" onclick="D.switchTab('signals')">Signals</button>
-    <button class="tab" onclick="D.switchTab('performance')">Performance</button>
-    <button class="tab" onclick="D.switchTab('news')">News</button>
-  </div>
+  <nav class="tabs" role="navigation">
+    <button class="tab active" data-tab="overview" onclick="D.switchTab('overview')">Overview</button>
+    <button class="tab" data-tab="trading" onclick="D.switchTab('trading')">Trading</button>
+    <button class="tab" data-tab="technical" onclick="D.switchTab('technical')">Technical</button>
+    <button class="tab" data-tab="signals" onclick="D.switchTab('signals')">Signals</button>
+    <button class="tab" data-tab="performance" onclick="D.switchTab('performance')">Performance</button>
+    <button class="tab" data-tab="news" onclick="D.switchTab('news')">News</button>
+  </nav>
 
   <!-- Overview Tab -->
   <div id="tab-overview" class="tab-panel active">
@@ -247,8 +247,17 @@ const D = {
   currentTab: 'overview',
 
   async init() {
+    this.applyTabFromHash();
+    window.addEventListener('hashchange', () => this.applyTabFromHash());
     await this.loadAll();
     document.getElementById('marketFilter').addEventListener('change', () => this.onMarketChange());
+  },
+
+  applyTabFromHash() {
+    const hash = (location.hash || '#overview').slice(1).toLowerCase();
+    const valid = ['overview', 'trading', 'technical', 'signals', 'performance', 'news'];
+    const tab = valid.includes(hash) ? hash : 'overview';
+    this.switchTab(tab, false);
   },
 
   async loadAll() {
@@ -792,10 +801,11 @@ const D = {
     ).join('');
   },
 
-  // ====== HELPERS ======
-  switchTab(tab) {
+  // ====== NAVIGATION ======
+  switchTab(tab, updateHash) {
+    if (updateHash !== false) location.hash = tab;
     this.currentTab = tab;
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.textContent.toLowerCase().includes(tab)));
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
   },
 
