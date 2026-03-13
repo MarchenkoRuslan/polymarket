@@ -40,11 +40,16 @@ Web API (FastAPI, `/docs`) reads data from DB and runs the **full pipeline** in 
 | Path | Description |
 |------|-------------|
 | `GET /docs` | Swagger UI |
+| `GET /dashboard` | Visual dashboard (Status, Markets, Trades, Signals, Performance, News). Hash URLs: `/dashboard#signals` |
 | `GET /api/v1/markets` | Market list (limit, offset) |
 | `GET /api/v1/markets/{market_id}` | Single market |
 | `GET /api/v1/trades` | Trades (market_id optional, limit, offset) |
 | `GET /api/v1/orderbook` | Order book snapshots (market_id optional, limit, offset) |
 | `GET /api/v1/signals` | ML signals (market_id optional, limit, offset) |
+| `GET /api/v1/features` | Features (market_id optional, limit, offset) |
+| `GET /api/v1/news` | News (limit, offset) |
+| `GET /api/v1/results` | Backtest results (market_id optional, limit, offset) |
+| `GET /api/v1/analytics` | Aggregated analytics (trade stats, P&L, spread timeline) |
 | `GET /api/v1/status` | db_ok, counts (markets, trades, orderbook, features, signals), last_*_error |
 
 ## Database Tables

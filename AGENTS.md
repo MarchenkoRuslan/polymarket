@@ -10,7 +10,7 @@ Automated system for trading on Polymarket prediction markets. Full pipeline: da
 
 | Service | Path | Task |
 |---------|------|------|
-| **Web API** | `api/` | FastAPI, Swagger UI (`/docs`). Endpoints: markets, trades, orderbook, signals, status. Lifespan: init_db + pipeline (collector→features→ml) in background |
+| **Web API** | `api/` | FastAPI, Swagger UI (`/docs`), Dashboard (`/dashboard`). Endpoints: markets, trades, orderbook, signals, features, news, results, analytics, status. Lifespan: init_db + pipeline (collector→features→ml) in background |
 | Web Server | `server.py` | uvicorn + same FastAPI app. Pipeline in background. For Railway/production |
 | Data Collector | `services/collector/` | Polymarket API (Gamma, CLOB), PMXT Parquet → `markets`, `trades`, `orderbook` |
 | News Collector | `services/news_collector/` | RSS → keyword filter → `news` table |
