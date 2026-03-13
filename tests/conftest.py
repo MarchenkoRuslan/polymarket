@@ -1,5 +1,4 @@
 """Pytest fixtures for integration tests."""
-import os
 from pathlib import Path
 
 import pytest
@@ -10,12 +9,12 @@ _SCHEMA_PATH = Path(__file__).resolve().parents[1] / "db" / "schema_sqlite.sql"
 
 
 @pytest.fixture(scope="function")
-def sqlite_db(tmp_path):
+def sqlite_db(tmp_path, monkeypatch):
     """Create a file-backed SQLite DB with schema for integration tests."""
     db_path = tmp_path / "test.db"
     db_url = f"sqlite:///{db_path}"
-    os.environ["DATABASE_URL"] = db_url
-    os.environ["DATABASE_SSLMODE"] = "disable"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    monkeypatch.setenv("DATABASE_SSLMODE", "disable")
     engine = create_engine(db_url)
     schema = _SCHEMA_PATH.read_text(encoding="utf-8")
     with engine.connect() as conn:

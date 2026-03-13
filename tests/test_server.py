@@ -7,8 +7,10 @@ from server import init_db, run_collect, run_pipeline, _get_status
 
 
 def test_init_db_does_not_crash():
-    """init_db catches errors and does not raise."""
+    """init_db catches errors and sets _migration_error on failure."""
+    import server
     init_db()
+    assert server._migration_error is None or isinstance(server._migration_error, str)
 
 
 def test_run_collect_stores_error_and_reraises():
@@ -40,9 +42,11 @@ def test_run_pipeline_calls_collect_features_ml():
 
 
 def test_run_pipeline_catches_errors():
-    """run_pipeline catches exceptions and does not propagate."""
+    """run_pipeline catches exceptions, stores error, does not propagate."""
+    import server
     with patch("server.run_collect", side_effect=RuntimeError("boom")):
         run_pipeline()
+    assert server._last_pipeline_error == "boom"
 
 
 def test_run_pipeline_skips_ml_when_features_fail():
