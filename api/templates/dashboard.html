@@ -312,7 +312,7 @@ const D = {
 
   async loadAll() {
     const [status, markets, trades, signals, orderbook, analytics, news, features] = await Promise.all([
-      this.fetch('/status'), this.fetch('/markets?limit=200'), this.fetch('/trades?limit=500'),
+      this.fetch('/status'), this.fetch('/markets?limit=200&with_signals=true'), this.fetch('/trades?limit=500'),
       this.fetch('/signals?limit=500'), this.fetch('/orderbook?limit=300'),
       this.fetch('/analytics'), this.fetch('/news?limit=50'), this.fetch('/features?limit=1000'),
     ]);
@@ -486,11 +486,11 @@ const D = {
 
     html += '</div>';
 
-    html += '<div class="card full" style="margin-bottom:1rem"><h3><span class="dot" style="background:var(--accent)"></span> Market Summary</h3>';
-    html += '<div class="card-desc">Click any row to select that market and see detailed charts. Price = probability of "Yes" outcome (0&ndash;1).</div>';
+    html += '<div class="card full" style="margin-bottom:1rem"><h3><span class="dot" style="background:var(--accent)"></span> Markets with ML Predictions</h3>';
+    html += '<div class="card-desc">Only markets with ML predictions are shown. Click any row for detailed charts. Price = probability of "Yes" outcome (0&ndash;1).</div>';
 
     if (!markets.length) {
-      html += '<div class="empty-state"><div class="icon">&#128202;</div>No markets loaded yet. Waiting for data collection to complete.</div>';
+      html += '<div class="empty-state"><div class="icon">&#128202;</div>No markets with predictions yet. Waiting for the pipeline (collector &rarr; features &rarr; ML) to complete.</div>';
     } else {
       const totalPages = Math.ceil(markets.length / this.marketsPerPage);
       this.marketPage = Math.max(0, Math.min(this.marketPage, totalPages - 1));
@@ -498,7 +498,7 @@ const D = {
       const pageMarkets = markets.slice(start, start + this.marketsPerPage);
 
       html += '<div style="overflow-x:auto"><table class="data"><thead><tr>';
-      html += '<th>Market (question)</th><th>Status</th><th>Trades</th><th>Volume (shares)</th><th>Avg Price</th><th>Latest Signal</th>';
+      html += '<th>Market (question)</th><th>Status</th><th>Trades</th><th>Volume</th><th>Avg Price</th><th>Latest Signal</th><th>Trade</th>';
       html += '</tr></thead><tbody>';
       pageMarkets.forEach(m => {
         const st = stats.find(s => s.market_id === m.market_id);
@@ -509,6 +509,10 @@ const D = {
           ? '<span class="badge badge-green">Settled</span>'
           : '<span class="badge badge-cyan">Active</span>';
 
+        const tradeLink = m.polymarket_url
+          ? '<a href="' + m.polymarket_url + '" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:none;font-size:0.8rem" title="Open on Polymarket">&#128279; Trade</a>'
+          : '<span class="text-muted">—</span>';
+
         html += '<tr class="clickable" onclick="D.selectMarket(\'' + m.market_id + '\')">';
         html += '<td title="' + (m.market_id) + '">' + (m.question || m.event || m.market_id).substring(0, 55) + '</td>';
         html += '<td>' + statusBadge + '</td>';
@@ -516,6 +520,7 @@ const D = {
         html += '<td>' + (st ? this.fmtVolume(st.total_volume) : '—') + '</td>';
         html += '<td>' + (st ? st.avg_price.toFixed(3) : '—') + '</td>';
         html += '<td>' + (lastSigPred !== null ? this.signalBadge(lastSigPred) : '<span class="text-muted">—</span>') + '</td>';
+        html += '<td onclick="event.stopPropagation()">' + tradeLink + '</td>';
         html += '</tr>';
       });
       html += '</tbody></table></div>';
@@ -550,11 +555,18 @@ const D = {
 
   renderOverviewSingleMarket(el) {
     const mName = this.getSelectedMarketName();
+    const mid = this.getSelectedMarketId();
+    const mData = (this.data.markets?.items || []).find(x => x.market_id === mid);
     const trades = this.getFilteredTrades();
     const signals = this.getFilteredSignals();
 
     let html = '<div class="card full" style="margin-bottom:1rem;padding:0.75rem 1.25rem">';
-    html += '<div style="font-size:1rem;font-weight:600;color:var(--text)">' + mName + '</div>';
+    html += '<div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">';
+    html += '<div style="font-size:1rem;font-weight:600;color:var(--text);flex:1">' + mName + '</div>';
+    if (mData && mData.polymarket_url) {
+      html += '<a href="' + mData.polymarket_url + '" target="_blank" rel="noopener" style="background:var(--accent);color:#fff;padding:0.4rem 1rem;border-radius:8px;text-decoration:none;font-size:0.85rem;font-weight:600;white-space:nowrap">&#128279; Trade on Polymarket</a>';
+    }
+    html += '</div>';
     if (trades.length) {
       const lastPrice = trades[trades.length - 1].price;
       const firstPrice = trades[0].price;
@@ -756,16 +768,22 @@ const D = {
 
   renderTradeStatsTable() {
     const stats = this.data.analytics?.trade_stats || [];
+    const markets = this.data.markets?.items || [];
     const el = document.getElementById('tradeStatsTable');
     if (!stats.length) { el.innerHTML = '<div class="empty-state">No trade data available</div>'; return; }
-    el.innerHTML = '<table class="data"><thead><tr><th>Market</th><th>Trades</th><th>Volume (shares)</th><th>Avg Price</th><th>Buy%</th></tr></thead><tbody>' +
+    el.innerHTML = '<table class="data"><thead><tr><th>Market</th><th>Trades</th><th>Volume</th><th>Avg Price</th><th>Buy%</th><th></th></tr></thead><tbody>' +
       stats.map(s => {
         const buyPct = s.trade_count > 0 ? ((s.buy_count / s.trade_count) * 100).toFixed(0) : '—';
         const buyClass = buyPct > 55 ? 'text-green' : buyPct < 45 ? 'text-red' : '';
+        const mData = markets.find(m => m.market_id === s.market_id);
+        const linkHtml = mData && mData.polymarket_url
+          ? '<a href="' + mData.polymarket_url + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent2);font-size:0.75rem">&#128279;</a>'
+          : '';
         return '<tr class="clickable" onclick="D.selectMarket(\'' + s.market_id + '\')">' +
           '<td title="' + (s.market_id) + '">' + this.truncate(s.question || s.market_id, 30) + '</td>' +
           '<td>' + this.fmtN(s.trade_count) + '</td><td>' + this.fmtVolume(s.total_volume) + '</td>' +
-          '<td>' + s.avg_price.toFixed(3) + '</td><td class="' + buyClass + '">' + buyPct + '%</td></tr>';
+          '<td>' + s.avg_price.toFixed(3) + '</td><td class="' + buyClass + '">' + buyPct + '%</td>' +
+          '<td>' + linkHtml + '</td></tr>';
       }).join('') + '</tbody></table>';
   },
 

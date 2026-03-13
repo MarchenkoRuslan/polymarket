@@ -19,6 +19,7 @@ def init_db():
     """Run Alembic migrations on startup.
 
     Sets _migration_error on failure so /health and /api/v1/status can report it.
+    Falls back to ensuring critical tables exist if migrations fail.
     """
     global _migration_error
     try:
@@ -37,6 +38,50 @@ def init_db():
     except Exception as e:
         _migration_error = str(e)
         logger.exception("DB migrations failed")
+
+    _ensure_news_table_fallback()
+
+
+def _ensure_news_table_fallback():
+    """Ensure the news table exists even if Alembic migration partially failed."""
+    try:
+        from db import SessionLocal
+        from sqlalchemy import text, inspect as sa_inspect
+        session = SessionLocal()
+        try:
+            insp = sa_inspect(session.bind)
+            if "news" not in insp.get_table_names():
+                dialect = session.bind.dialect.name
+                if dialect == "sqlite":
+                    session.execute(text(
+                        "CREATE TABLE IF NOT EXISTS news ("
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "ts TEXT NOT NULL, source TEXT NOT NULL, "
+                        "title TEXT, link TEXT, summary TEXT, "
+                        "created_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+                    ))
+                else:
+                    session.execute(text(
+                        "CREATE TABLE IF NOT EXISTS news ("
+                        "id SERIAL PRIMARY KEY, "
+                        "ts TIMESTAMP NOT NULL, source TEXT NOT NULL, "
+                        "title TEXT, link TEXT, summary TEXT, "
+                        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                    ))
+                session.execute(text("CREATE INDEX IF NOT EXISTS idx_news_ts ON news (ts)"))
+                session.commit()
+                logger.info("News table created (fallback)")
+
+            if "markets" in insp.get_table_names():
+                cols = [c["name"] for c in insp.get_columns("markets")]
+                if "slug" not in cols:
+                    session.execute(text("ALTER TABLE markets ADD COLUMN slug TEXT"))
+                    session.commit()
+                    logger.info("Added slug column to markets (fallback)")
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning("Fallback table check failed: %s", e)
 
 
 def run_collect():

@@ -43,23 +43,54 @@ def _safe_float(val, default: float = 0.0) -> float:
     return float(val)
 
 
-def _get_markets(session: Session, limit: int = 100, offset: int = 0) -> MarketsList:
+def _polymarket_url(slug: str | None) -> str | None:
+    if slug:
+        return f"https://polymarket.com/event/{slug}"
+    return None
+
+
+def _get_markets(
+    session: Session,
+    limit: int = 100,
+    offset: int = 0,
+    with_signals: bool = False,
+) -> MarketsList:
     limit, offset = _clamp_pagination(limit, offset)
-    total = session.execute(text("SELECT COUNT(*) FROM markets")).scalar() or 0
-    rows = session.execute(
-        text(
-            "SELECT market_id, event, question, end_date, outcome_settled "
-            "FROM markets ORDER BY market_id LIMIT :lim OFFSET :off"
-        ),
-        {"lim": limit, "off": offset},
-    ).fetchall()
+
+    if with_signals:
+        total = session.execute(text(
+            "SELECT COUNT(DISTINCT m.market_id) FROM markets m "
+            "INNER JOIN signals s ON m.market_id = s.market_id"
+        )).scalar() or 0
+        rows = session.execute(
+            text(
+                "SELECT m.market_id, m.event, m.question, m.slug, m.end_date, m.outcome_settled "
+                "FROM markets m INNER JOIN ("
+                "  SELECT DISTINCT market_id FROM signals"
+                ") s ON m.market_id = s.market_id "
+                "ORDER BY m.market_id LIMIT :lim OFFSET :off"
+            ),
+            {"lim": limit, "off": offset},
+        ).fetchall()
+    else:
+        total = session.execute(text("SELECT COUNT(*) FROM markets")).scalar() or 0
+        rows = session.execute(
+            text(
+                "SELECT market_id, event, question, slug, end_date, outcome_settled "
+                "FROM markets ORDER BY market_id LIMIT :lim OFFSET :off"
+            ),
+            {"lim": limit, "off": offset},
+        ).fetchall()
+
     items = [
         MarketOut(
             market_id=r[0],
             event=r[1],
             question=r[2],
-            end_date=r[3],
-            outcome_settled=r[4],
+            slug=r[3],
+            polymarket_url=_polymarket_url(r[3]),
+            end_date=r[4],
+            outcome_settled=r[5],
         )
         for r in rows
     ]
@@ -69,7 +100,7 @@ def _get_markets(session: Session, limit: int = 100, offset: int = 0) -> Markets
 def _get_market(session: Session, market_id: str) -> MarketOut | None:
     row = session.execute(
         text(
-            "SELECT market_id, event, question, end_date, outcome_settled "
+            "SELECT market_id, event, question, slug, end_date, outcome_settled "
             "FROM markets WHERE market_id = :m"
         ),
         {"m": market_id},
@@ -80,8 +111,10 @@ def _get_market(session: Session, market_id: str) -> MarketOut | None:
         market_id=row[0],
         event=row[1],
         question=row[2],
-        end_date=row[3],
-        outcome_settled=row[4],
+        slug=row[3],
+        polymarket_url=_polymarket_url(row[3]),
+        end_date=row[4],
+        outcome_settled=row[5],
     )
 
 
@@ -226,9 +259,10 @@ def list_markets(
     session: Session = Depends(get_db),
     limit: int = Query(default=100, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
+    with_signals: bool = Query(default=False, description="Only return markets that have ML predictions"),
 ):
-    """List markets with pagination."""
-    return _get_markets(session, limit=limit, offset=offset)
+    """List markets with pagination. Use with_signals=true to show only markets with predictions."""
+    return _get_markets(session, limit=limit, offset=offset, with_signals=with_signals)
 
 
 @router.get("/markets/{market_id}", response_model=MarketOut)
@@ -313,14 +347,17 @@ def _get_features(session: Session, market_id: str | None, limit: int = 500, off
 
 def _get_news(session: Session, limit: int = 50, offset: int = 0) -> NewsList:
     limit, offset = _clamp_pagination(limit, offset)
-    total = session.execute(text("SELECT COUNT(*) FROM news")).scalar() or 0
-    rows = session.execute(
-        text(
-            "SELECT id, ts, source, title, link, summary "
-            "FROM news ORDER BY ts DESC LIMIT :lim OFFSET :off"
-        ),
-        {"lim": limit, "off": offset},
-    ).fetchall()
+    try:
+        total = session.execute(text("SELECT COUNT(*) FROM news")).scalar() or 0
+        rows = session.execute(
+            text(
+                "SELECT id, ts, source, title, link, summary "
+                "FROM news ORDER BY ts DESC LIMIT :lim OFFSET :off"
+            ),
+            {"lim": limit, "off": offset},
+        ).fetchall()
+    except Exception:
+        return NewsList(items=[], total=0)
     items = [
         NewsOut(id=r[0], ts=r[1], source=r[2], title=r[3], link=r[4], summary=r[5])
         for r in rows

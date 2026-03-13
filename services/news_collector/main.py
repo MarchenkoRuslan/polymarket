@@ -110,40 +110,48 @@ async def main():
     """Fetch RSS, filter by keywords, store in DB."""
     logger.info("News Collector starting")
     feeds = os.getenv("RSS_FEEDS", "").split(",") if os.getenv("RSS_FEEDS") else DEFAULT_FEEDS
+    logger.info("News Collector: %d feeds configured, %d keywords", len(feeds), len(KEYWORDS))
     session = SessionLocal()
     total_stored = 0
+    total_fetched = 0
     try:
         ensure_news_table(session)
+        logger.info("News table ensured")
         for url in feeds:
             url = url.strip()
             if not url:
                 continue
             source = _source_name(url)
-            items = fetch_rss(url)
-            filtered = filter_by_keywords(items, KEYWORDS)
-            batch = filtered[:30]
-            stored = 0
-            for it in batch:
-                ts = it.get("published") or datetime.now(timezone.utc)
-                inserted = insert_news(
-                    session,
-                    source=source,
-                    title=it.get("title", "")[:500],
-                    link=it.get("link", "")[:500],
-                    summary=it.get("summary", "")[:500],
-                    ts=ts,
-                )
-                if inserted:
-                    stored += 1
-            session.commit()
-            total_stored += stored
-            logger.info("RSS %s: %d/%d items stored (new)", source, stored, len(batch))
+            try:
+                items = fetch_rss(url)
+                total_fetched += len(items)
+                filtered = filter_by_keywords(items, KEYWORDS)
+                batch = filtered[:30]
+                stored = 0
+                for it in batch:
+                    ts = it.get("published") or datetime.now(timezone.utc)
+                    inserted = insert_news(
+                        session,
+                        source=source,
+                        title=it.get("title", "")[:500],
+                        link=it.get("link", "")[:500],
+                        summary=it.get("summary", "")[:500],
+                        ts=ts,
+                    )
+                    if inserted:
+                        stored += 1
+                session.commit()
+                total_stored += stored
+                logger.info("RSS %s: %d fetched, %d filtered, %d stored (new)", source, len(items), len(filtered), stored)
+            except Exception as feed_err:
+                session.rollback()
+                logger.warning("RSS %s failed: %s", source, feed_err)
     except Exception as e:
         session.rollback()
-        logger.exception("%s", e)
+        logger.exception("News Collector error: %s", e)
     finally:
         session.close()
-    logger.info("News Collector finished: %d total new items", total_stored)
+    logger.info("News Collector finished: %d fetched, %d new items stored", total_fetched, total_stored)
 
 
 if __name__ == "__main__":

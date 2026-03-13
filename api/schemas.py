@@ -10,6 +10,8 @@ class MarketOut(BaseModel):
     market_id: str
     event: str | None = None
     question: str | None = None
+    slug: str | None = None
+    polymarket_url: str | None = None
     end_date: datetime | None = None
     outcome_settled: bool | None = None
 
