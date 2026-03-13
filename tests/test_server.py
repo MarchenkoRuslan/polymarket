@@ -1,4 +1,6 @@
 """Tests for server.py - init_db, run_collect, run_pipeline, _get_status."""
+import asyncio
+
 from unittest.mock import AsyncMock, patch
 
 from server import init_db, run_collect, run_pipeline, _get_status
@@ -63,3 +65,50 @@ def test_get_status_returns_dict():
     assert "db_ok" in status
     assert "markets" in status
     assert "trades" in status
+
+
+def test_skip_lifespan_defaults_false():
+    """_skip_lifespan is False by default (uvicorn mode)."""
+    import importlib
+    import server
+    importlib.reload(server)
+    assert server._skip_lifespan is False
+
+
+def test_lifespan_runs_init_when_skip_false():
+    """Lifespan calls init_db and pipeline_loop when _skip_lifespan is False."""
+    import server
+    server._skip_lifespan = False
+
+    with (
+        patch("api.app.init_db") as mock_init,
+        patch("api.app.pipeline_loop"),
+    ):
+        from api.app import lifespan
+        from fastapi import FastAPI
+
+        async def _run():
+            async with lifespan(FastAPI()):
+                pass
+
+        asyncio.run(_run())
+        mock_init.assert_called_once()
+
+
+def test_lifespan_skips_init_when_skip_true():
+    """Lifespan does NOT call init_db when _skip_lifespan is True."""
+    import server
+    server._skip_lifespan = True
+
+    with patch("api.app.init_db") as mock_init:
+        from api.app import lifespan
+        from fastapi import FastAPI
+
+        async def _run():
+            async with lifespan(FastAPI()):
+                pass
+
+        asyncio.run(_run())
+        mock_init.assert_not_called()
+
+    server._skip_lifespan = False
