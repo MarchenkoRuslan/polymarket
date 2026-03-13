@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Polymarket Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+    h1 { margin-top: 0; }
+    h2 { margin: 1.5rem 0 0.5rem; font-size: 1rem; }
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem; margin-bottom: 1rem; }
+    .stat { background: #f0f0f0; padding: 0.5rem; border-radius: 6px; text-align: center; }
+    .stat.ok { background: #d4edda; }
+    .stat.fail { background: #f8d7da; }
+    .stat span { display: block; font-size: 0.75rem; color: #666; }
+    .stat strong { font-size: 1.25rem; }
+    .errors { background: #fff3cd; border: 1px solid #ffc107; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; }
+    .errors:empty { display: none; }
+    .errors div { margin: 0.25rem 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #eee; }
+    th { background: #f5f5f5; }
+    .chart-wrap { height: 280px; margin: 1rem 0; }
+    .loading { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Polymarket Dashboard</h1>
+
+  <h2>Status</h2>
+  <div id="status" class="loading">Loading…</div>
+  <div id="errors" class="errors"></div>
+
+  <h2>Markets</h2>
+  <div id="markets" class="loading">Loading…</div>
+
+  <h2>Trades (price over time)</h2>
+  <div class="chart-wrap">
+    <canvas id="tradesChart"></canvas>
+  </div>
+
+  <script>
+    const api = '/api/v1';
+
+    async function loadStatus() {
+      const el = document.getElementById('status');
+      const errEl = document.getElementById('errors');
+      try {
+        const r = await fetch(api + '/status');
+        const d = await r.json();
+        const items = [
+          { label: 'db_ok', value: d.db_ok ? 'OK' : 'FAIL', ok: d.db_ok },
+          { label: 'markets', value: d.markets },
+          { label: 'trades', value: d.trades },
+          { label: 'orderbook', value: d.orderbook },
+          { label: 'features', value: d.features },
+          { label: 'signals', value: d.signals },
+        ];
+        el.innerHTML = '<div class="status-grid">' + items.map(i =>
+          '<div class="stat' + (i.ok === false ? ' fail' : i.ok === true ? ' ok' : '') + '">' +
+          '<span>' + i.label + '</span><strong>' + i.value + '</strong></div>'
+        ).join('') + '</div>';
+
+        const errs = [
+          d.migration_error && 'Migration: ' + d.migration_error,
+          d.last_collect_error && 'Collect: ' + d.last_collect_error,
+          d.last_features_error && 'Features: ' + d.last_features_error,
+          d.last_ml_error && 'ML: ' + d.last_ml_error,
+          d.last_pipeline_error && 'Pipeline: ' + d.last_pipeline_error,
+          d.db_error && 'DB: ' + d.db_error
+        ].filter(Boolean);
+        errEl.innerHTML = errs.length ? errs.map(e => '<div>' + e + '</div>').join('') : '';
+      } catch (e) {
+        el.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    async function loadMarkets() {
+      const el = document.getElementById('markets');
+      try {
+        const r = await fetch(api + '/markets?limit=50');
+        const d = await r.json();
+        if (!d.items || d.items.length === 0) {
+          el.innerHTML = '<p>No markets</p>';
+          return;
+        }
+        el.innerHTML = '<table><thead><tr><th>Question</th><th>End date</th><th>Settled</th></tr></thead><tbody>' +
+          d.items.map(m => '<tr><td>' + (m.question || m.market_id || '-') + '</td><td>' +
+            (m.end_date ? new Date(m.end_date).toLocaleString() : '-') + '</td><td>' +
+            (m.outcome_settled != null ? m.outcome_settled : '-') + '</td></tr>').join('') +
+          '</tbody></table>';
+      } catch (e) {
+        el.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    let chartInstance = null;
+    async function loadTradesChart() {
+      try {
+        const r = await fetch(api + '/trades?limit=200');
+        const d = await r.json();
+        const items = (d.items || []).slice().reverse();
+        const labels = items.length ? items.map(t => t.ts ? new Date(t.ts).toLocaleString() : '') : [];
+        const data = items.length ? items.map(t => t.price) : [];
+
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(document.getElementById('tradesChart'), {
+          type: 'line',
+          data: { labels, datasets: [{ label: 'Price', data, borderColor: '#2563eb', fill: false }] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { maxTicksLimit: 12 } },
+              y: { beginAtZero: false }
+            }
+          }
+        });
+      } catch (e) {
+        document.getElementById('tradesChart').parentElement.innerHTML = '<p>Error: ' + e.message + '</p>';
+      }
+    }
+
+    loadStatus();
+    loadMarkets();
+    loadTradesChart();
+  </script>
+</body>
+</html>

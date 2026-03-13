@@ -1,10 +1,12 @@
 """FastAPI application with Swagger UI."""
 import logging
 import threading
+from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse, Response
+from fastapi.templating import Jinja2Templates
 
 from api.routes import router
 import server
@@ -60,6 +62,15 @@ def health():
 def favicon():
     """No favicon."""
     return Response(status_code=204)
+
+
+templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+
+@app.get("/dashboard", include_in_schema=False)
+async def dashboard(request: Request):
+    """Simple dashboard: Status, Markets table, Trades chart."""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
 app.include_router(router)
