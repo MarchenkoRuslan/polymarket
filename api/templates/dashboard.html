@@ -16,15 +16,18 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-    .header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 100; }
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 100; flex-wrap: wrap; gap: 0.5rem; }
     .header h1 { font-size: 1.25rem; font-weight: 700; background: linear-gradient(135deg, var(--accent), var(--violet)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .header-controls { display: flex; gap: 0.75rem; align-items: center; }
+    .header-controls { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
     .header-controls select, .header-controls button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 0.75rem; font-size: 0.8rem; cursor: pointer; transition: border-color 0.2s; }
     .header-controls select:hover, .header-controls button:hover { border-color: var(--accent); }
     .header-controls button.active { background: var(--accent); border-color: var(--accent); }
     .updated { font-size: 0.7rem; color: var(--muted); }
 
-    .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; padding: 1rem 1.5rem; }
+    .info-banner { margin: 0.75rem 1.5rem; padding: 0.75rem 1rem; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.25); border-radius: 10px; font-size: 0.8rem; color: var(--text2); line-height: 1.5; }
+    .info-banner strong { color: var(--accent2); }
+
+    .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; padding: 0.75rem 1.5rem; }
     .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 1rem; text-align: center; transition: border-color 0.2s, transform 0.2s; }
     .stat-card:hover { border-color: var(--accent); transform: translateY(-2px); }
     .stat-card .label { font-size: 0.7rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
@@ -47,8 +50,9 @@
 
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; transition: border-color 0.2s; }
     .card:hover { border-color: var(--accent); }
-    .card h3 { font-size: 0.9rem; font-weight: 600; color: var(--text2); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
-    .card h3 .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card h3 { font-size: 0.9rem; font-weight: 600; color: var(--text2); margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.5rem; }
+    .card h3 .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .card .card-desc { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.75rem; line-height: 1.4; }
     .card.full { grid-column: 1 / -1; }
     .chart-wrap { position: relative; height: 280px; }
     .chart-wrap.tall { height: 360px; }
@@ -61,6 +65,8 @@
     table.data th { text-align: left; padding: 0.5rem 0.6rem; color: var(--text2); border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; }
     table.data td { padding: 0.45rem 0.6rem; border-bottom: 1px solid rgba(71,85,105,0.3); }
     table.data tr:hover td { background: rgba(99,102,241,0.05); }
+    table.data tr.clickable { cursor: pointer; }
+    table.data tr.clickable:hover td { background: rgba(99,102,241,0.12); }
     .text-green { color: var(--green); }
     .text-red { color: var(--red); }
     .text-amber { color: var(--amber); }
@@ -79,7 +85,7 @@
     .news-item .title a:hover { text-decoration: underline; }
     .news-item .summary { font-size: 0.8rem; color: var(--text2); margin-top: 0.25rem; }
 
-    .insight-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+    .insight-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
     .insight { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
     .insight .insight-label { font-size: 0.7rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; }
     .insight .insight-value { font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0; }
@@ -92,16 +98,25 @@
     .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
     .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
     .badge-amber { background: rgba(245,158,11,0.15); color: var(--amber); }
+    .badge-cyan { background: rgba(6,182,212,0.15); color: var(--cyan); }
+
+    .signal-badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; }
+    .signal-buy { background: rgba(34,197,94,0.2); color: var(--green); }
+    .signal-sell { background: rgba(239,68,68,0.2); color: var(--red); }
+    .signal-hold { background: rgba(245,158,11,0.2); color: var(--amber); }
 
     .loading-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .market-hint { margin: 0 1.5rem 0.5rem; padding: 0.5rem 0.75rem; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); border-radius: 8px; font-size: 0.78rem; color: var(--amber); display: none; }
+    .market-hint.visible { display: block; }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>Polymarket Analytics</h1>
     <div class="header-controls">
-      <select id="marketFilter"><option value="">All Markets</option></select>
+      <select id="marketFilter"><option value="">All Markets (summary)</option></select>
       <button id="refreshBtn" onclick="D.toggleRefresh()" title="Auto-refresh every 30s">Auto</button>
       <span class="updated" id="lastUpdated"></span>
     </div>
@@ -109,8 +124,18 @@
 
   <div id="errorsBar" class="errors-bar"></div>
 
+  <div class="info-banner" id="infoBanner">
+    <strong>Polymarket Trading System</strong> &mdash; automated prediction market analysis pipeline.
+    Collects trade &amp; orderbook data, computes technical indicators (RSI, MACD, volatility), generates ML signals (probability of price increase), and runs backtests.
+    Price on a prediction market = probability of the outcome: <strong>0.80 means 80% chance of "Yes"</strong>.
+  </div>
+
   <div class="stats-bar" id="statsBar">
     <div class="stat-card"><div class="label">Status</div><div class="value"><div class="loading-spinner"></div></div></div>
+  </div>
+
+  <div class="market-hint" id="marketHint">
+    Select a specific market above to see detailed price charts, technical analysis, and ML signals.
   </div>
 
   <nav class="tabs" role="navigation">
@@ -122,117 +147,132 @@
     <button class="tab" data-tab="news" onclick="D.switchTab('news')">News</button>
   </nav>
 
-  <!-- Overview Tab -->
+  <!-- Overview -->
   <div id="tab-overview" class="tab-panel active">
-    <div class="grid-2">
-      <div class="card">
-        <h3><span class="dot" style="background:var(--accent)"></span> Price History</h3>
-        <div class="chart-wrap"><canvas id="overviewPrice"></canvas></div>
-      </div>
-      <div class="card">
-        <h3><span class="dot" style="background:var(--green)"></span> Market Status</h3>
-        <div class="chart-wrap"><canvas id="settlementPie"></canvas></div>
-      </div>
-      <div class="card">
-        <h3><span class="dot" style="background:var(--cyan)"></span> Volume by Market</h3>
-        <div class="chart-wrap"><canvas id="volumeByMarket"></canvas></div>
-      </div>
-      <div class="card">
-        <h3><span class="dot" style="background:var(--violet)"></span> Signal Predictions</h3>
-        <div class="chart-wrap"><canvas id="signalTimeline"></canvas></div>
-      </div>
-    </div>
+    <div id="overviewContent"></div>
   </div>
 
-  <!-- Trading Tab -->
+  <!-- Trading -->
   <div id="tab-trading" class="tab-panel">
-    <div class="card full" style="margin-bottom:1rem">
-      <h3><span class="dot" style="background:var(--accent)"></span> Price &amp; Volume</h3>
-      <div class="chart-wrap tall"><canvas id="priceVolume"></canvas></div>
+    <div id="tradingNoMarket" class="card full" style="margin-bottom:1rem;display:none">
+      <div class="empty-state"><div class="icon">&#128200;</div>Select a market above to see detailed trading charts</div>
     </div>
-    <div class="grid-2">
-      <div class="card">
-        <h3><span class="dot" style="background:var(--green)"></span> Buy / Sell Distribution</h3>
-        <div class="chart-wrap"><canvas id="buySellDonut"></canvas></div>
+    <div id="tradingContent">
+      <div class="card full" style="margin-bottom:1rem">
+        <h3><span class="dot" style="background:var(--accent)"></span> Price &amp; Volume</h3>
+        <div class="card-desc">Line = price (outcome probability, 0&ndash;1). Bars = trade volume: green for buys, red for sells.</div>
+        <div class="chart-wrap tall"><canvas id="priceVolume"></canvas></div>
       </div>
-      <div class="card">
-        <h3><span class="dot" style="background:var(--amber)"></span> Trade Statistics by Market</h3>
-        <div style="max-height:280px; overflow-y:auto" id="tradeStatsTable"></div>
+      <div class="grid-2">
+        <div class="card">
+          <h3><span class="dot" style="background:var(--green)"></span> Buy / Sell Ratio</h3>
+          <div class="card-desc">Proportion of buy vs sell trades by volume in the loaded sample.</div>
+          <div class="chart-wrap"><canvas id="buySellDonut"></canvas></div>
+        </div>
+        <div class="card">
+          <h3><span class="dot" style="background:var(--amber)"></span> Trade Statistics by Market</h3>
+          <div class="card-desc">Number of trades, total volume, average price, and buy percentage per market. Click a row to select that market.</div>
+          <div style="max-height:280px; overflow-y:auto" id="tradeStatsTable"></div>
+        </div>
       </div>
-    </div>
-    <div class="card full" style="margin-top:1rem">
-      <h3><span class="dot" style="background:var(--pink)"></span> Price Distribution</h3>
-      <div class="chart-wrap"><canvas id="priceDistribution"></canvas></div>
+      <div class="card full" style="margin-top:1rem">
+        <h3><span class="dot" style="background:var(--pink)"></span> Price Distribution</h3>
+        <div class="card-desc">Histogram showing how often the price fell into each range. Helps spot where the market spent most of its time.</div>
+        <div class="chart-wrap"><canvas id="priceDistribution"></canvas></div>
+      </div>
     </div>
   </div>
 
-  <!-- Technical Tab -->
+  <!-- Technical -->
   <div id="tab-technical" class="tab-panel">
-    <div class="grid-2">
-      <div class="card">
-        <h3><span class="dot" style="background:var(--cyan)"></span> RSI (14-period)</h3>
-        <div class="chart-wrap"><canvas id="rsiChart"></canvas></div>
-      </div>
-      <div class="card">
-        <h3><span class="dot" style="background:var(--violet)"></span> MACD</h3>
-        <div class="chart-wrap"><canvas id="macdChart"></canvas></div>
-      </div>
+    <div id="techNoMarket" class="card full" style="margin-bottom:1rem;display:none">
+      <div class="empty-state"><div class="icon">&#128202;</div>Select a market above to see RSI and MACD charts</div>
     </div>
-    <div class="card full" style="margin-top:1rem">
-      <h3><span class="dot" style="background:var(--accent)"></span> Feature Correlation Matrix</h3>
-      <div id="correlationMatrix" style="overflow-x:auto"></div>
-    </div>
-    <div class="card full" style="margin-top:1rem">
-      <h3><span class="dot" style="background:var(--green)"></span> Feature Summary</h3>
-      <div id="featureSummaryTable" style="overflow-x:auto"></div>
+    <div id="techContent">
+      <div class="grid-2">
+        <div class="card">
+          <h3><span class="dot" style="background:var(--cyan)"></span> RSI (14-period)</h3>
+          <div class="card-desc">Relative Strength Index. Above 70 = overbought (price may drop). Below 30 = oversold (price may rise). Between 30&ndash;70 = neutral.</div>
+          <div class="chart-wrap"><canvas id="rsiChart"></canvas></div>
+        </div>
+        <div class="card">
+          <h3><span class="dot" style="background:var(--violet)"></span> MACD</h3>
+          <div class="card-desc">When MACD line crosses above the signal line = bullish trend. Below = bearish. Histogram bars show trend strength.</div>
+          <div class="chart-wrap"><canvas id="macdChart"></canvas></div>
+        </div>
+      </div>
+      <div class="card full" style="margin-top:1rem">
+        <h3><span class="dot" style="background:var(--accent)"></span> Feature Correlation Matrix</h3>
+        <div class="card-desc">How strongly features are related to each other. Green = positive correlation, red = negative. Strong correlations (|r| &gt; 0.5) may indicate redundant features.</div>
+        <div id="correlationMatrix" style="overflow-x:auto"></div>
+      </div>
+      <div class="card full" style="margin-top:1rem">
+        <h3><span class="dot" style="background:var(--green)"></span> Feature Summary</h3>
+        <div class="card-desc">Descriptive statistics for computed technical indicators across all data points.</div>
+        <div id="featureSummaryTable" style="overflow-x:auto"></div>
+      </div>
     </div>
   </div>
 
-  <!-- Signals Tab -->
+  <!-- Signals -->
   <div id="tab-signals" class="tab-panel">
+    <div class="info-banner" style="margin:0 0 1rem 0">
+      <strong>What is a signal?</strong> The ML model analyzes current market features and outputs the <strong>probability of price increase</strong> (0&ndash;1).
+      Value <strong>&gt; 0.6</strong> = <span class="signal-badge signal-buy">Buy</span> recommendation,
+      <strong>&lt; 0.4</strong> = <span class="signal-badge signal-sell">Sell</span>,
+      <strong>0.4&ndash;0.6</strong> = <span class="signal-badge signal-hold">Hold</span> (uncertain).
+    </div>
     <div class="insight-cards" id="signalInsights"></div>
     <div class="grid-2">
       <div class="card">
-        <h3><span class="dot" style="background:var(--accent)"></span> Prediction Distribution</h3>
+        <h3><span class="dot" style="background:var(--accent)"></span> Signal Distribution</h3>
+        <div class="card-desc">How many signals fell into each probability bucket. Green = buy zone, red = sell zone, amber = hold.</div>
         <div class="chart-wrap"><canvas id="signalDistChart"></canvas></div>
       </div>
       <div class="card">
-        <h3><span class="dot" style="background:var(--green)"></span> Signals by Market</h3>
+        <h3><span class="dot" style="background:var(--green)"></span> Avg Signal by Market</h3>
+        <div class="card-desc">Average predicted probability per market. Green &gt; 0.6 (bullish), red &lt; 0.4 (bearish), amber = neutral.</div>
         <div class="chart-wrap"><canvas id="signalByMarket"></canvas></div>
       </div>
     </div>
     <div class="card full" style="margin-top:1rem">
       <h3><span class="dot" style="background:var(--cyan)"></span> Signal vs Price Overlay</h3>
+      <div class="card-desc">ML signal (orange, right axis 0&ndash;1) overlaid on actual price (blue, left axis). Shows whether the model's predictions align with real price movement.</div>
       <div class="chart-wrap tall"><canvas id="signalPriceOverlay"></canvas></div>
     </div>
   </div>
 
-  <!-- Performance Tab -->
+  <!-- Performance -->
   <div id="tab-performance" class="tab-panel">
+    <div class="info-banner" style="margin:0 0 1rem 0">
+      <strong>P&amp;L (Profit &amp; Loss)</strong> &mdash; backtest results of the ML-based trading strategy. The system simulates trades based on ML signals, accounting for fees (30 bps) and slippage, showing potential profit/loss.
+    </div>
     <div class="insight-cards" id="pnlInsights"></div>
     <div class="card full" style="margin-bottom:1rem">
       <h3><span class="dot" style="background:var(--green)"></span> Cumulative P&amp;L</h3>
+      <div class="card-desc">Green line = accumulated profit/loss over time. Bars = individual trade results (green = profit, red = loss).</div>
       <div class="chart-wrap tall"><canvas id="pnlChart"></canvas></div>
     </div>
     <div class="grid-2">
       <div class="card">
         <h3><span class="dot" style="background:var(--amber)"></span> Bid-Ask Spread Over Time</h3>
+        <div class="card-desc">Spread between best bid and ask prices in basis points. Higher spread = more expensive to enter/exit positions.</div>
         <div class="chart-wrap"><canvas id="spreadChart"></canvas></div>
       </div>
       <div class="card">
         <h3><span class="dot" style="background:var(--violet)"></span> Profit by Market</h3>
+        <div class="card-desc">Which markets generated profit (green) vs loss (red) in the backtest.</div>
         <div class="chart-wrap"><canvas id="profitByMarket"></canvas></div>
       </div>
     </div>
   </div>
 
-  <!-- News Tab -->
+  <!-- News -->
   <div id="tab-news" class="tab-panel">
-    <div class="grid-2">
-      <div class="card" style="grid-column:1/-1">
-        <h3><span class="dot" style="background:var(--cyan)"></span> News Feed</h3>
-        <div id="newsFeed"></div>
-      </div>
+    <div class="card full">
+      <h3><span class="dot" style="background:var(--cyan)"></span> News Feed</h3>
+      <div class="card-desc">Automatically collected news from RSS sources, filtered by prediction market keywords.</div>
+      <div id="newsFeed"></div>
     </div>
   </div>
 
@@ -280,12 +320,25 @@ const D = {
   populateMarketFilter() {
     const sel = document.getElementById('marketFilter');
     const current = sel.value;
-    const opts = '<option value="">All Markets</option>';
     const items = this.data.markets?.items || [];
-    sel.innerHTML = opts + items.map(m =>
-      '<option value="' + m.market_id + '"' + (m.market_id === current ? ' selected' : '') + '>' +
-      (m.question || m.market_id).substring(0, 60) + '</option>'
-    ).join('');
+    let html = '<option value="">All Markets (summary)</option>';
+    items.forEach(m => {
+      const label = (m.question || m.event || m.market_id).substring(0, 65);
+      const selected = m.market_id === current ? ' selected' : '';
+      html += '<option value="' + m.market_id + '"' + selected + '>' + label + '</option>';
+    });
+    sel.innerHTML = html;
+  },
+
+  getSelectedMarketId() {
+    return document.getElementById('marketFilter').value;
+  },
+
+  getSelectedMarketName() {
+    const mid = this.getSelectedMarketId();
+    if (!mid) return 'All Markets';
+    const m = (this.data.markets?.items || []).find(x => x.market_id === mid);
+    return m ? (m.question || m.event || mid) : mid;
   },
 
   onMarketChange() {
@@ -293,29 +346,31 @@ const D = {
   },
 
   getFilteredTrades() {
-    const mid = document.getElementById('marketFilter').value;
+    const mid = this.getSelectedMarketId();
     const items = (this.data.trades?.items || []).slice().reverse();
     return mid ? items.filter(t => t.market_id === mid) : items;
   },
 
   getFilteredSignals() {
-    const mid = document.getElementById('marketFilter').value;
+    const mid = this.getSelectedMarketId();
     const items = (this.data.signals?.items || []).slice().reverse();
     return mid ? items.filter(s => s.market_id === mid) : items;
   },
 
   getFilteredFeatures() {
-    const mid = document.getElementById('marketFilter').value;
+    const mid = this.getSelectedMarketId();
     const items = (this.data.features?.items || []).slice().reverse();
     return mid ? items.filter(f => f.market_id === mid) : items;
   },
 
   renderAll() {
+    const hasMarket = !!this.getSelectedMarketId();
+    document.getElementById('marketHint').classList.toggle('visible', !hasMarket);
     this.renderStatus();
     this.renderErrors();
     this.renderOverview();
-    this.renderTrading();
-    this.renderTechnical();
+    this.renderTrading(hasMarket);
+    this.renderTechnical(hasMarket);
     this.renderSignals();
     this.renderPerformance();
     this.renderNews();
@@ -325,15 +380,17 @@ const D = {
     const s = this.data.status;
     const a = this.data.analytics;
     if (!s) return;
+
+    const signalLabel = a ? this.interpretSignal(a.avg_prediction) : null;
     const cards = [
       { label: 'Database', value: s.db_ok ? 'OK' : 'FAIL', cls: s.db_ok ? 'ok' : 'bad' },
       { label: 'Markets', value: this.fmtN(s.markets), sub: this.countSettled() },
       { label: 'Trades', value: this.fmtN(s.trades), sub: a ? 'Vol: ' + this.fmtN(a.total_volume) : '' },
-      { label: 'Features', value: this.fmtN(s.features) },
-      { label: 'Signals', value: this.fmtN(s.signals), sub: a ? 'Avg: ' + (a.avg_prediction).toFixed(2) : '' },
+      { label: 'Features', value: this.fmtN(s.features), sub: 'RSI, MACD, vol.' },
+      { label: 'Signals', value: this.fmtN(s.signals), sub: signalLabel ? 'Avg: ' + a.avg_prediction.toFixed(2) + ' (' + signalLabel + ')' : '' },
       { label: 'Orderbook', value: this.fmtN(s.orderbook), sub: a ? 'Spread: ' + a.avg_spread_bps.toFixed(0) + ' bps' : '' },
       { label: 'News', value: this.fmtN(s.news) },
-      { label: 'P&L', value: a ? (a.total_profit >= 0 ? '+' : '') + a.total_profit.toFixed(2) : '—', cls: a && a.total_profit >= 0 ? 'ok' : a ? 'bad' : '' },
+      { label: 'P&L', value: a ? (a.total_profit >= 0 ? '+' : '') + a.total_profit.toFixed(2) : '—', cls: a && a.total_profit >= 0 ? 'ok' : a ? 'bad' : '', sub: 'backtest' },
     ];
     document.getElementById('statsBar').innerHTML = cards.map(c =>
       '<div class="stat-card ' + (c.cls || '') + '">' +
@@ -342,6 +399,18 @@ const D = {
       (c.sub ? '<div class="sub">' + c.sub + '</div>' : '') +
       '</div>'
     ).join('');
+  },
+
+  interpretSignal(prediction) {
+    if (prediction > 0.6) return 'buy';
+    if (prediction < 0.4) return 'sell';
+    return 'hold';
+  },
+
+  signalBadge(prediction) {
+    if (prediction > 0.6) return '<span class="signal-badge signal-buy">Buy (' + prediction.toFixed(2) + ')</span>';
+    if (prediction < 0.4) return '<span class="signal-badge signal-sell">Sell (' + prediction.toFixed(2) + ')</span>';
+    return '<span class="signal-badge signal-hold">Hold (' + prediction.toFixed(2) + ')</span>';
   },
 
   countSettled() {
@@ -364,25 +433,139 @@ const D = {
     document.getElementById('errorsBar').innerHTML = errs.map(e => '<div class="error-msg">' + e + '</div>').join('');
   },
 
-  // ====== OVERVIEW TAB ======
+  // ====== OVERVIEW ======
   renderOverview() {
-    this.chartOverviewPrice();
+    const el = document.getElementById('overviewContent');
+    const mid = this.getSelectedMarketId();
+    if (mid) {
+      this.renderOverviewSingleMarket(el);
+    } else {
+      this.renderOverviewAllMarkets(el);
+    }
+  },
+
+  renderOverviewAllMarkets(el) {
+    const markets = this.data.markets?.items || [];
+    const stats = this.data.analytics?.trade_stats || [];
+    const signals = this.data.signals?.items || [];
+
+    const signalsByMarket = {};
+    signals.forEach(s => {
+      if (!signalsByMarket[s.market_id]) signalsByMarket[s.market_id] = [];
+      signalsByMarket[s.market_id].push(s.prediction);
+    });
+
+    let html = '<div class="grid-2" style="margin-bottom:1rem">';
+
+    html += '<div class="card"><h3><span class="dot" style="background:var(--green)"></span> Market Status</h3>';
+    html += '<div class="card-desc">Active vs settled (resolved) markets.</div>';
+    html += '<div class="chart-wrap"><canvas id="settlementPie"></canvas></div></div>';
+
+    html += '<div class="card"><h3><span class="dot" style="background:var(--cyan)"></span> Volume by Market</h3>';
+    html += '<div class="card-desc">Top 8 markets by total trade volume.</div>';
+    html += '<div class="chart-wrap"><canvas id="volumeByMarket"></canvas></div></div>';
+
+    html += '</div>';
+
+    html += '<div class="card full" style="margin-bottom:1rem"><h3><span class="dot" style="background:var(--accent)"></span> Market Summary</h3>';
+    html += '<div class="card-desc">Click any row to select that market and see detailed charts. Price = probability of "Yes" outcome (0&ndash;1).</div>';
+
+    if (!markets.length) {
+      html += '<div class="empty-state"><div class="icon">&#128202;</div>No markets loaded yet. Waiting for data collection to complete.</div>';
+    } else {
+      html += '<div style="overflow-x:auto"><table class="data"><thead><tr>';
+      html += '<th>Market (question)</th><th>Status</th><th>Trades</th><th>Volume</th><th>Avg Price</th><th>Latest Signal</th>';
+      html += '</tr></thead><tbody>';
+      markets.forEach(m => {
+        const st = stats.find(s => s.market_id === m.market_id);
+        const sigs = signalsByMarket[m.market_id] || [];
+        const lastSig = sigs.length > 0 ? sigs[sigs.length - 1] : null;
+        const settled = m.outcome_settled != null && m.outcome_settled !== false;
+        const statusBadge = settled
+          ? '<span class="badge badge-green">Settled</span>'
+          : '<span class="badge badge-cyan">Active</span>';
+
+        html += '<tr class="clickable" onclick="D.selectMarket(\'' + m.market_id + '\')">';
+        html += '<td title="' + (m.market_id) + '">' + (m.question || m.event || m.market_id).substring(0, 55) + '</td>';
+        html += '<td>' + statusBadge + '</td>';
+        html += '<td>' + (st ? this.fmtN(st.trade_count) : '—') + '</td>';
+        html += '<td>' + (st ? this.fmtN(st.total_volume) : '—') + '</td>';
+        html += '<td>' + (st ? st.avg_price.toFixed(3) : '—') + '</td>';
+        html += '<td>' + (lastSig !== null ? this.signalBadge(lastSig) : '<span class="text-muted">—</span>') + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+
+    el.innerHTML = html;
+
     this.chartSettlementPie();
     this.chartVolumeByMarket();
+  },
+
+  renderOverviewSingleMarket(el) {
+    const mName = this.getSelectedMarketName();
+    const trades = this.getFilteredTrades();
+    const signals = this.getFilteredSignals();
+
+    let html = '<div class="card full" style="margin-bottom:1rem;padding:0.75rem 1.25rem">';
+    html += '<div style="font-size:1rem;font-weight:600;color:var(--text)">' + mName + '</div>';
+    if (trades.length) {
+      const lastPrice = trades[trades.length - 1].price;
+      const firstPrice = trades[0].price;
+      const change = lastPrice - firstPrice;
+      const changePct = firstPrice > 0 ? (change / firstPrice * 100) : 0;
+      const cls = change >= 0 ? 'text-green' : 'text-red';
+      const arrow = change >= 0 ? '&#9650;' : '&#9660;';
+      html += '<div style="margin-top:0.25rem"><span style="font-size:1.5rem;font-weight:700">' + lastPrice.toFixed(3) + '</span>';
+      html += ' <span class="' + cls + '" style="font-size:0.9rem">' + arrow + ' ' + (change >= 0 ? '+' : '') + change.toFixed(4) + ' (' + changePct.toFixed(1) + '%)</span></div>';
+      html += '<div style="font-size:0.75rem;color:var(--muted);margin-top:0.15rem">Current price = probability of "Yes" outcome. Based on ' + trades.length + ' trades.</div>';
+    }
+    if (signals.length) {
+      const lastSig = signals[signals.length - 1];
+      html += '<div style="margin-top:0.5rem">Latest ML signal: ' + this.signalBadge(lastSig.prediction) + '</div>';
+    }
+    html += '</div>';
+
+    html += '<div class="grid-2">';
+    html += '<div class="card"><h3><span class="dot" style="background:var(--accent)"></span> Price History</h3>';
+    html += '<div class="card-desc">Price = outcome probability (0 = impossible, 1 = certain). Time-ordered trade data.</div>';
+    html += '<div class="chart-wrap"><canvas id="overviewPrice"></canvas></div></div>';
+
+    html += '<div class="card"><h3><span class="dot" style="background:var(--violet)"></span> ML Predictions</h3>';
+    html += '<div class="card-desc">Model prediction over time. Above 0.6 = model expects price to rise (buy zone). Below 0.4 = expects drop (sell zone).</div>';
+    html += '<div class="chart-wrap"><canvas id="signalTimeline"></canvas></div></div>';
+    html += '</div>';
+
+    el.innerHTML = html;
+
+    this.chartOverviewPrice();
     this.chartSignalTimeline();
+  },
+
+  selectMarket(mid) {
+    document.getElementById('marketFilter').value = mid;
+    this.renderAll();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   },
 
   chartOverviewPrice() {
     const trades = this.getFilteredTrades();
     if (!trades.length) return this.emptyChart('overviewPrice');
-    const labels = trades.map(t => this.fmtDate(t.ts));
-    const data = trades.map(t => t.price);
     this.makeChart('overviewPrice', 'line', {
-      labels, datasets: [{
-        label: 'Price', data, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)',
+      labels: trades.map(t => this.fmtDate(t.ts)),
+      datasets: [{
+        label: 'Price (probability)', data: trades.map(t => t.price),
+        borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)',
         fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
       }]
-    }, { scales: { x: { display: true, ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } } } });
+    }, {
+      scales: {
+        x: { ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        y: { min: 0, max: 1, title: { display: true, text: 'Probability', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }
+      }
+    });
   },
 
   chartSettlementPie() {
@@ -391,9 +574,9 @@ const D = {
     const settled = items.filter(m => m.outcome_settled != null && m.outcome_settled !== false).length;
     const active = items.length - settled;
     this.makeChart('settlementPie', 'doughnut', {
-      labels: ['Active', 'Settled'],
+      labels: ['Active (' + active + ')', 'Settled (' + settled + ')'],
       datasets: [{ data: [active, settled], backgroundColor: ['#6366f1', '#22c55e'], borderWidth: 0 }]
-    }, { plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 15 } } } });
+    }, { plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 15, font: { size: 12 } } } } });
   },
 
   chartVolumeByMarket() {
@@ -401,9 +584,18 @@ const D = {
     if (!stats.length) return this.emptyChart('volumeByMarket');
     const top = stats.slice(0, 8);
     this.makeChart('volumeByMarket', 'bar', {
-      labels: top.map(s => (s.question || s.market_id).substring(0, 25)),
-      datasets: [{ label: 'Volume', data: top.map(s => s.total_volume), backgroundColor: COLORS.slice(0, 8), borderRadius: 4 }]
-    }, { indexAxis: 'y', scales: { x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } } } });
+      labels: top.map(s => this.truncate(s.question || s.market_id, 30)),
+      datasets: [{
+        label: 'Volume', data: top.map(s => s.total_volume),
+        backgroundColor: COLORS.slice(0, 8), borderRadius: 4,
+      }]
+    }, {
+      indexAxis: 'y',
+      scales: {
+        x: { title: { display: true, text: 'Total Volume', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } }
+      }
+    });
   },
 
   chartSignalTimeline() {
@@ -412,15 +604,46 @@ const D = {
     this.makeChart('signalTimeline', 'line', {
       labels: signals.map(s => this.fmtDate(s.ts)),
       datasets: [{
-        label: 'Prediction', data: signals.map(s => s.prediction),
+        label: 'ML Prediction', data: signals.map(s => s.prediction),
         borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.1)',
         fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
+      }, {
+        label: 'Buy threshold (0.6)', data: signals.map(() => 0.6),
+        borderColor: 'rgba(34,197,94,0.35)', borderDash: [5,5], pointRadius: 0, borderWidth: 1, fill: false,
+      }, {
+        label: 'Sell threshold (0.4)', data: signals.map(() => 0.4),
+        borderColor: 'rgba(239,68,68,0.35)', borderDash: [5,5], pointRadius: 0, borderWidth: 1, fill: false,
       }]
-    }, { scales: { x: { ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { min: 0, max: 1, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } } } });
+    }, {
+      scales: {
+        x: { ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        y: { min: 0, max: 1, title: { display: true, text: 'P(price increase)', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }
+      },
+      plugins: { legend: { labels: { color: '#94a3b8' } } }
+    });
   },
 
-  // ====== TRADING TAB ======
-  renderTrading() {
+  // ====== TRADING ======
+  renderTrading(hasMarket) {
+    const noMarketEl = document.getElementById('tradingNoMarket');
+    const contentEl = document.getElementById('tradingContent');
+    if (!hasMarket) {
+      noMarketEl.style.display = 'block';
+      contentEl.style.display = 'none';
+
+      const stats = this.data.analytics?.trade_stats || [];
+      if (stats.length) {
+        contentEl.style.display = 'block';
+        noMarketEl.style.display = 'none';
+        this.chartPriceVolume();
+        this.chartBuySell();
+        this.renderTradeStatsTable();
+        this.chartPriceDistribution();
+      }
+      return;
+    }
+    noMarketEl.style.display = 'none';
+    contentEl.style.display = 'block';
     this.chartPriceVolume();
     this.chartBuySell();
     this.renderTradeStatsTable();
@@ -430,6 +653,10 @@ const D = {
   chartPriceVolume() {
     const trades = this.getFilteredTrades();
     if (!trades.length) return this.emptyChart('priceVolume');
+    const mid = this.getSelectedMarketId();
+    if (!mid && trades.length > 100) {
+      return this.emptyChart('priceVolume');
+    }
     const labels = trades.map(t => this.fmtDate(t.ts));
     this.makeChart('priceVolume', 'bar', {
       labels,
@@ -450,32 +677,39 @@ const D = {
     }, {
       scales: {
         x: { ticks: { maxTicksLimit: 12, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
-        yPrice: { position: 'left', ticks: { color: '#6366f1', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
-        yVol: { position: 'right', ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
-      }
+        yPrice: { position: 'left', title: { display: true, text: 'Price (probability)', color: '#6366f1' }, ticks: { color: '#6366f1', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        yVol: { position: 'right', title: { display: true, text: 'Volume', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+      },
+      plugins: { legend: { labels: { color: '#94a3b8' } } }
     });
   },
 
   chartBuySell() {
     const trades = this.getFilteredTrades();
     if (!trades.length) return this.emptyChart('buySellDonut');
-    const buys = trades.filter(t => t.side === 'buy').length;
-    const sells = trades.filter(t => t.side === 'sell').length;
+    const buys = trades.filter(t => t.side === 'buy');
+    const sells = trades.filter(t => t.side === 'sell');
+    const buyVol = buys.reduce((s, t) => s + t.size, 0);
+    const sellVol = sells.reduce((s, t) => s + t.size, 0);
     this.makeChart('buySellDonut', 'doughnut', {
-      labels: ['Buy (' + buys + ')', 'Sell (' + sells + ')'],
-      datasets: [{ data: [buys, sells], backgroundColor: ['#22c55e', '#ef4444'], borderWidth: 0 }]
-    }, { plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 15 } } } });
+      labels: [
+        'Buys: ' + buys.length + ' trades (' + buyVol.toFixed(1) + ' vol)',
+        'Sells: ' + sells.length + ' trades (' + sellVol.toFixed(1) + ' vol)'
+      ],
+      datasets: [{ data: [buyVol || buys.length, sellVol || sells.length], backgroundColor: ['#22c55e', '#ef4444'], borderWidth: 0 }]
+    }, { plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 15, font: { size: 11 } } } } });
   },
 
   renderTradeStatsTable() {
     const stats = this.data.analytics?.trade_stats || [];
     const el = document.getElementById('tradeStatsTable');
-    if (!stats.length) { el.innerHTML = '<div class="empty-state">No trade data</div>'; return; }
+    if (!stats.length) { el.innerHTML = '<div class="empty-state">No trade data available</div>'; return; }
     el.innerHTML = '<table class="data"><thead><tr><th>Market</th><th>Trades</th><th>Volume</th><th>Avg Price</th><th>Buy%</th></tr></thead><tbody>' +
       stats.map(s => {
         const buyPct = s.trade_count > 0 ? ((s.buy_count / s.trade_count) * 100).toFixed(0) : '—';
         const buyClass = buyPct > 55 ? 'text-green' : buyPct < 45 ? 'text-red' : '';
-        return '<tr><td title="' + (s.market_id) + '">' + (s.question || s.market_id).substring(0, 30) + '</td>' +
+        return '<tr class="clickable" onclick="D.selectMarket(\'' + s.market_id + '\')">' +
+          '<td title="' + (s.market_id) + '">' + this.truncate(s.question || s.market_id, 30) + '</td>' +
           '<td>' + this.fmtN(s.trade_count) + '</td><td>' + this.fmtN(s.total_volume) + '</td>' +
           '<td>' + s.avg_price.toFixed(3) + '</td><td class="' + buyClass + '">' + buyPct + '%</td></tr>';
       }).join('') + '</tbody></table>';
@@ -495,12 +729,34 @@ const D = {
     });
     const labels = buckets.map((_, i) => (min + i * step).toFixed(2));
     this.makeChart('priceDistribution', 'bar', {
-      labels, datasets: [{ label: 'Count', data: buckets, backgroundColor: 'rgba(99,102,241,0.6)', borderRadius: 3 }]
-    }, { scales: { x: { ticks: { maxTicksLimit: 10, color: '#64748b', font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } } } });
+      labels, datasets: [{
+        label: 'Count', data: buckets,
+        backgroundColor: 'rgba(99,102,241,0.6)', borderRadius: 3,
+      }]
+    }, {
+      scales: {
+        x: { title: { display: true, text: 'Price (probability)', color: '#64748b' }, ticks: { maxTicksLimit: 10, color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+        y: { title: { display: true, text: 'Number of trades', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }
+      }
+    });
   },
 
-  // ====== TECHNICAL TAB ======
-  renderTechnical() {
+  // ====== TECHNICAL ======
+  renderTechnical(hasMarket) {
+    const noEl = document.getElementById('techNoMarket');
+    const contentEl = document.getElementById('techContent');
+
+    if (!hasMarket) {
+      const feats = this.getFilteredFeatures();
+      if (!feats.length) {
+        noEl.style.display = 'block';
+        contentEl.style.display = 'none';
+        return;
+      }
+    }
+    noEl.style.display = 'none';
+    contentEl.style.display = 'block';
+
     this.chartRSI();
     this.chartMACD();
     this.renderCorrelationMatrix();
@@ -520,7 +776,7 @@ const D = {
     }, {
       scales: {
         x: { ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
-        y: { min: 0, max: 100, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }
+        y: { min: 0, max: 100, title: { display: true, text: 'RSI', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }
       },
       plugins: { legend: { labels: { color: '#94a3b8' } } }
     });
@@ -542,13 +798,13 @@ const D = {
       labels: tsSet.map(t => this.fmtDate(t)),
       datasets: [
         { type: 'line', label: 'MACD', data: tsSet.map(t => macdMap[t] || 0), borderColor: '#8b5cf6', pointRadius: 0, borderWidth: 2, order: 1 },
-        { type: 'line', label: 'Signal', data: tsSet.map(t => sigMap[t] || 0), borderColor: '#f59e0b', pointRadius: 0, borderWidth: 2, borderDash: [4,4], order: 1 },
+        { type: 'line', label: 'Signal Line', data: tsSet.map(t => sigMap[t] || 0), borderColor: '#f59e0b', pointRadius: 0, borderWidth: 2, borderDash: [4,4], order: 1 },
         { label: 'Histogram', data: tsSet.map(t => histMap[t] || 0), backgroundColor: tsSet.map(t => (histMap[t] || 0) >= 0 ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.5)'), borderRadius: 2, order: 2 },
       ]
     }, {
       scales: {
         x: { ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
-        y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }
+        y: { title: { display: true, text: 'MACD', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }
       },
       plugins: { legend: { labels: { color: '#94a3b8' } } }
     });
@@ -559,30 +815,39 @@ const D = {
     const el = document.getElementById('correlationMatrix');
     if (!corrs.length) { el.innerHTML = '<div class="empty-state">No correlation data available</div>'; return; }
 
+    const FEATURE_LABELS = {
+      'ma_1h': 'Moving Avg 1h', 'ma_5m': 'Moving Avg 5m',
+      'volatility_1h': 'Volatility 1h', 'volatility_5m': 'Volatility 5m',
+      'rsi_14': 'RSI (14)', 'macd': 'MACD', 'macd_signal': 'MACD Signal', 'macd_hist': 'MACD Histogram',
+      'volume_1h': 'Volume 1h', 'volume_5m': 'Volume 5m',
+      'spread_bps': 'Spread (bps)', 'mid_price': 'Mid Price',
+    };
+
     const names = [...new Set(corrs.flatMap(c => [c.feature_1, c.feature_2]))].sort();
     const map = {};
     corrs.forEach(c => { map[c.feature_1 + '|' + c.feature_2] = c.correlation; map[c.feature_2 + '|' + c.feature_1] = c.correlation; });
 
-    const cols = names.length + 1;
-    let html = '<div class="heatmap" style="grid-template-columns: 80px repeat(' + names.length + ', 1fr)">';
-    html += '<div class="heatmap-label"></div>' + names.map(n => '<div class="heatmap-label" title="' + n + '">' + this.shortName(n) + '</div>').join('');
+    let html = '<div class="heatmap" style="grid-template-columns: 100px repeat(' + names.length + ', 1fr)">';
+    html += '<div class="heatmap-label"></div>' + names.map(n => '<div class="heatmap-label" title="' + (FEATURE_LABELS[n] || n) + '">' + this.shortName(n) + '</div>').join('');
     names.forEach(r => {
-      html += '<div class="heatmap-label" title="' + r + '">' + this.shortName(r) + '</div>';
+      html += '<div class="heatmap-label" title="' + (FEATURE_LABELS[r] || r) + '">' + this.shortName(r) + '</div>';
       names.forEach(c => {
         const v = r === c ? 1.0 : (map[r + '|' + c] ?? 0);
-        html += '<div class="heatmap-cell" style="background:' + this.corrColor(v) + '" title="' + r + ' vs ' + c + ': ' + v.toFixed(3) + '">' + v.toFixed(2) + '</div>';
+        html += '<div class="heatmap-cell" style="background:' + this.corrColor(v) + '" title="' + (FEATURE_LABELS[r] || r) + ' vs ' + (FEATURE_LABELS[c] || c) + ': ' + v.toFixed(3) + '">' + v.toFixed(2) + '</div>';
       });
     });
     html += '</div>';
 
     const strong = corrs.filter(c => Math.abs(c.correlation) > 0.5).sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation));
     if (strong.length) {
-      html += '<div style="margin-top:1rem"><h4 style="font-size:0.8rem;color:var(--text2);margin-bottom:0.5rem">Key Correlations (|r| > 0.5)</h4>';
+      html += '<div style="margin-top:1rem"><h4 style="font-size:0.8rem;color:var(--text2);margin-bottom:0.5rem">Strong Correlations (|r| > 0.5)</h4>';
       html += strong.slice(0, 10).map(c => {
         const cls = c.correlation > 0 ? 'text-green' : 'text-red';
         const dir = c.correlation > 0 ? 'positive' : 'negative';
+        const n1 = FEATURE_LABELS[c.feature_1] || c.feature_1;
+        const n2 = FEATURE_LABELS[c.feature_2] || c.feature_2;
         return '<div style="font-size:0.8rem;margin:0.25rem 0"><span class="' + cls + '">' + c.correlation.toFixed(3) + '</span> ' +
-          c.feature_1 + ' &harr; ' + c.feature_2 + ' <span class="text-muted">(' + dir + ')</span></div>';
+          n1 + ' &harr; ' + n2 + ' <span class="text-muted">(' + dir + ')</span></div>';
       }).join('');
       html += '</div>';
     }
@@ -592,16 +857,27 @@ const D = {
   renderFeatureSummary() {
     const summary = this.data.analytics?.feature_summary || [];
     const el = document.getElementById('featureSummaryTable');
-    if (!summary.length) { el.innerHTML = '<div class="empty-state">No feature data</div>'; return; }
-    el.innerHTML = '<table class="data"><thead><tr><th>Feature</th><th>Mean</th><th>Min</th><th>Max</th><th>Range</th><th>Count</th></tr></thead><tbody>' +
+    if (!summary.length) { el.innerHTML = '<div class="empty-state">No feature data available</div>'; return; }
+
+    const FEATURE_LABELS = {
+      'ma_1h': 'Moving Average 1h', 'ma_5m': 'Moving Average 5m',
+      'volatility_1h': 'Volatility 1h', 'volatility_5m': 'Volatility 5m',
+      'rsi_14': 'RSI (14-period)', 'macd': 'MACD', 'macd_signal': 'MACD Signal', 'macd_hist': 'MACD Histogram',
+      'volume_1h': 'Volume 1h', 'volume_5m': 'Volume 5m',
+      'spread_bps': 'Spread (bps)', 'mid_price': 'Mid Price',
+    };
+
+    el.innerHTML = '<table class="data"><thead><tr><th>Feature</th><th>Description</th><th>Mean</th><th>Min</th><th>Max</th><th>Range</th><th>Count</th></tr></thead><tbody>' +
       summary.map(f => {
         const range = (f.max - f.min).toFixed(4);
-        return '<tr><td>' + f.name + '</td><td>' + f.mean.toFixed(4) + '</td><td class="text-cyan">' + f.min.toFixed(4) +
-          '</td><td class="text-amber">' + f.max.toFixed(4) + '</td><td>' + range + '</td><td>' + f.count + '</td></tr>';
+        const label = FEATURE_LABELS[f.name] || f.name;
+        return '<tr><td><strong>' + f.name + '</strong></td><td class="text-muted">' + label + '</td><td>' + f.mean.toFixed(4) +
+          '</td><td class="text-cyan">' + f.min.toFixed(4) + '</td><td class="text-amber">' + f.max.toFixed(4) +
+          '</td><td>' + range + '</td><td>' + f.count + '</td></tr>';
       }).join('') + '</tbody></table>';
   },
 
-  // ====== SIGNALS TAB ======
+  // ====== SIGNALS ======
   renderSignals() {
     this.renderSignalInsights();
     this.chartSignalDistribution();
@@ -611,9 +887,12 @@ const D = {
 
   renderSignalInsights() {
     const signals = this.getFilteredSignals();
-    const a = this.data.analytics;
     const el = document.getElementById('signalInsights');
-    if (!signals.length) { el.innerHTML = ''; return; }
+    if (!signals.length) {
+      el.innerHTML = '<div class="insight"><div class="insight-label">Signals</div><div class="insight-value text-muted">No data</div>' +
+        '<div class="insight-detail">ML model has not generated predictions yet</div></div>';
+      return;
+    }
 
     const preds = signals.map(s => s.prediction);
     const avg = preds.reduce((a, b) => a + b, 0) / preds.length;
@@ -623,10 +902,10 @@ const D = {
     const neutral = preds.length - bullish - bearish;
 
     el.innerHTML = [
-      { label: 'Avg Prediction', value: avg.toFixed(3), detail: 'std: ' + std.toFixed(3), cls: avg > 0.5 ? 'text-green' : 'text-red' },
-      { label: 'Bullish Signals', value: bullish, detail: ((bullish/preds.length)*100).toFixed(0) + '% of total', cls: 'text-green' },
-      { label: 'Bearish Signals', value: bearish, detail: ((bearish/preds.length)*100).toFixed(0) + '% of total', cls: 'text-red' },
-      { label: 'Neutral Signals', value: neutral, detail: ((neutral/preds.length)*100).toFixed(0) + '% of total', cls: 'text-amber' },
+      { label: 'Avg Prediction', value: avg.toFixed(3), detail: 'std: ' + std.toFixed(3) + ' | overall: ' + this.interpretSignal(avg), cls: avg > 0.5 ? 'text-green' : 'text-red' },
+      { label: 'Buy Signals', value: bullish, detail: ((bullish/preds.length)*100).toFixed(0) + '% — prediction > 0.6', cls: 'text-green' },
+      { label: 'Sell Signals', value: bearish, detail: ((bearish/preds.length)*100).toFixed(0) + '% — prediction < 0.4', cls: 'text-red' },
+      { label: 'Hold (neutral)', value: neutral, detail: ((neutral/preds.length)*100).toFixed(0) + '% — prediction 0.4–0.6', cls: 'text-amber' },
     ].map(c =>
       '<div class="insight"><div class="insight-label">' + c.label + '</div>' +
       '<div class="insight-value ' + c.cls + '">' + c.value + '</div>' +
@@ -638,13 +917,23 @@ const D = {
     const dist = this.data.analytics?.signal_distribution || [];
     if (!dist.length) return this.emptyChart('signalDistChart');
     this.makeChart('signalDistChart', 'bar', {
-      labels: dist.map(d => d.bucket.toFixed(1)),
+      labels: dist.map(d => {
+        const v = d.bucket;
+        if (v >= 0.6) return v.toFixed(1) + ' (buy)';
+        if (v <= 0.4) return v.toFixed(1) + ' (sell)';
+        return v.toFixed(1) + ' (hold)';
+      }),
       datasets: [{
         label: 'Count', data: dist.map(d => d.count),
-        backgroundColor: dist.map(d => d.bucket >= 0.5 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'),
+        backgroundColor: dist.map(d => d.bucket >= 0.6 ? 'rgba(34,197,94,0.6)' : d.bucket <= 0.4 ? 'rgba(239,68,68,0.6)' : 'rgba(245,158,11,0.5)'),
         borderRadius: 4,
       }]
-    }, { scales: { x: { title: { display: true, text: 'Prediction', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } }, y: { title: { display: true, text: 'Count', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } } } });
+    }, {
+      scales: {
+        x: { title: { display: true, text: 'Prediction (P of price increase)', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+        y: { title: { display: true, text: 'Count', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }
+      }
+    });
   },
 
   chartSignalByMarket() {
@@ -660,19 +949,47 @@ const D = {
     });
     const entries = Object.entries(byMarket).map(([mid, v]) => ({
       mid, avg: v.sum / v.count, count: v.count,
-      label: (stats.find(s => s.market_id === mid)?.question || mid).substring(0, 25),
+      label: this.truncate(stats.find(s => s.market_id === mid)?.question || mid, 30),
     })).sort((a, b) => b.count - a.count).slice(0, 8);
 
     this.makeChart('signalByMarket', 'bar', {
       labels: entries.map(e => e.label),
-      datasets: [{ label: 'Avg Prediction', data: entries.map(e => e.avg), backgroundColor: entries.map(e => e.avg >= 0.5 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'), borderRadius: 4 }]
-    }, { indexAxis: 'y', scales: { x: { min: 0, max: 1, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } } } });
+      datasets: [{
+        label: 'Avg Prediction', data: entries.map(e => e.avg),
+        backgroundColor: entries.map(e => e.avg >= 0.6 ? 'rgba(34,197,94,0.6)' : e.avg <= 0.4 ? 'rgba(239,68,68,0.6)' : 'rgba(245,158,11,0.5)'),
+        borderRadius: 4,
+      }]
+    }, {
+      indexAxis: 'y',
+      scales: {
+        x: { min: 0, max: 1, title: { display: true, text: 'Avg Prediction', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } }
+      }
+    });
   },
 
   chartSignalPriceOverlay() {
     const trades = this.getFilteredTrades();
     const signals = this.getFilteredSignals();
     if (!trades.length && !signals.length) return this.emptyChart('signalPriceOverlay');
+
+    const mid = this.getSelectedMarketId();
+    if (!mid) {
+      const canvas = document.getElementById('signalPriceOverlay');
+      if (canvas) {
+        const parent = canvas.parentElement;
+        if (this.charts['signalPriceOverlay']) { this.charts['signalPriceOverlay'].destroy(); delete this.charts['signalPriceOverlay']; }
+        const existing = parent.querySelector('.empty-state');
+        if (existing) existing.remove();
+        const div = document.createElement('div');
+        div.className = 'empty-state';
+        div.innerHTML = '<div class="icon">&#128200;</div>Select a specific market to overlay signal on price';
+        div.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center';
+        parent.style.position = 'relative';
+        parent.appendChild(div);
+      }
+      return;
+    }
 
     const datasets = [];
     if (trades.length) {
@@ -683,21 +1000,21 @@ const D = {
     }
     if (signals.length) {
       datasets.push({
-        label: 'Signal', data: signals.map(s => ({ x: new Date(s.ts).getTime(), y: s.prediction })),
+        label: 'ML Signal', data: signals.map(s => ({ x: new Date(s.ts).getTime(), y: s.prediction })),
         borderColor: '#f59e0b', pointRadius: 1.5, borderWidth: 1.5, tension: 0.3, yAxisID: 'ySignal', showLine: true,
       });
     }
     this.makeChart('signalPriceOverlay', 'scatter', { datasets }, {
       scales: {
-        x: { type: 'linear', ticks: { callback: v => new Date(v).toLocaleDateString(), maxTicksLimit: 10, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
-        yPrice: { position: 'left', title: { display: true, text: 'Price', color: '#6366f1' }, ticks: { color: '#6366f1', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
-        ySignal: { position: 'right', min: 0, max: 1, title: { display: true, text: 'Signal', color: '#f59e0b' }, ticks: { color: '#f59e0b', font: { size: 10 } }, grid: { display: false } },
+        x: { type: 'linear', ticks: { callback: v => new Date(v).toLocaleDateString('en', { day: '2-digit', month: 'short' }), maxTicksLimit: 10, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        yPrice: { position: 'left', title: { display: true, text: 'Price (probability)', color: '#6366f1' }, ticks: { color: '#6366f1', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        ySignal: { position: 'right', min: 0, max: 1, title: { display: true, text: 'ML Signal', color: '#f59e0b' }, ticks: { color: '#f59e0b', font: { size: 10 } }, grid: { display: false } },
       },
       plugins: { legend: { labels: { color: '#94a3b8' } } }
     });
   },
 
-  // ====== PERFORMANCE TAB ======
+  // ====== PERFORMANCE ======
   renderPerformance() {
     this.renderPnlInsights();
     this.chartPnL();
@@ -708,7 +1025,11 @@ const D = {
   renderPnlInsights() {
     const pnl = this.data.analytics?.pnl_timeline || [];
     const el = document.getElementById('pnlInsights');
-    if (!pnl.length) { el.innerHTML = '<div class="insight"><div class="insight-label">P&L</div><div class="insight-value text-muted">No data</div></div>'; return; }
+    if (!pnl.length) {
+      el.innerHTML = '<div class="insight"><div class="insight-label">Performance</div><div class="insight-value text-muted">No data</div>' +
+        '<div class="insight-detail">Backtest has not completed yet</div></div>';
+      return;
+    }
 
     const profits = pnl.map(p => p.profit);
     const total = profits.reduce((a, b) => a + b, 0);
@@ -722,7 +1043,7 @@ const D = {
     const profitFactor = avgLoss !== 0 ? Math.abs(avgProfit / avgLoss) : 0;
 
     el.innerHTML = [
-      { label: 'Total P&L', value: (total >= 0 ? '+' : '') + total.toFixed(2), cls: total >= 0 ? 'text-green' : 'text-red' },
+      { label: 'Total P&L', value: (total >= 0 ? '+' : '') + total.toFixed(2), detail: 'sum of all trades', cls: total >= 0 ? 'text-green' : 'text-red' },
       { label: 'Win Rate', value: winRate.toFixed(0) + '%', detail: wins + 'W / ' + losses + 'L', cls: winRate >= 50 ? 'text-green' : 'text-red' },
       { label: 'Best Trade', value: '+' + maxProfit.toFixed(2), cls: 'text-green' },
       { label: 'Worst Trade', value: maxLoss.toFixed(2), cls: 'text-red' },
@@ -771,7 +1092,12 @@ const D = {
         borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)',
         fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
       }]
-    }, { scales: { x: { ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { title: { display: true, text: 'Basis Points', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } } } });
+    }, {
+      scales: {
+        x: { ticks: { maxTicksLimit: 8, color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        y: { title: { display: true, text: 'Basis Points', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }
+      }
+    });
   },
 
   chartProfitByMarket() {
@@ -781,17 +1107,35 @@ const D = {
     pnl.forEach(p => { byMarket[p.market_id] = (byMarket[p.market_id] || 0) + p.profit; });
     const entries = Object.entries(byMarket).sort((a, b) => b[1] - a[1]).slice(0, 10);
     const stats = this.data.analytics?.trade_stats || [];
+    const markets = this.data.markets?.items || [];
+
     this.makeChart('profitByMarket', 'bar', {
-      labels: entries.map(([mid]) => (stats.find(s => s.market_id === mid)?.question || mid).substring(0, 25)),
-      datasets: [{ label: 'Profit', data: entries.map(([, v]) => v), backgroundColor: entries.map(([, v]) => v >= 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'), borderRadius: 4 }]
-    }, { indexAxis: 'y', scales: { x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } }, y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } } } });
+      labels: entries.map(([mid]) => {
+        const name = stats.find(s => s.market_id === mid)?.question || markets.find(m => m.market_id === mid)?.question || mid;
+        return this.truncate(name, 30);
+      }),
+      datasets: [{
+        label: 'Profit/Loss', data: entries.map(([, v]) => v),
+        backgroundColor: entries.map(([, v]) => v >= 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'),
+        borderRadius: 4,
+      }]
+    }, {
+      indexAxis: 'y',
+      scales: {
+        x: { title: { display: true, text: 'P&L', color: '#64748b' }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,0.3)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } }
+      }
+    });
   },
 
-  // ====== NEWS TAB ======
+  // ====== NEWS ======
   renderNews() {
     const news = this.data.news?.items || [];
     const el = document.getElementById('newsFeed');
-    if (!news.length) { el.innerHTML = '<div class="empty-state"><div class="icon">&#128240;</div>No news collected yet</div>'; return; }
+    if (!news.length) {
+      el.innerHTML = '<div class="empty-state"><div class="icon">&#128240;</div>No news collected yet. The system automatically collects news from RSS sources.</div>';
+      return;
+    }
     el.innerHTML = news.map(n =>
       '<div class="news-item">' +
       '<div class="meta"><span class="badge badge-amber">' + (n.source || 'unknown') + '</span> &middot; ' + new Date(n.ts).toLocaleString() + '</div>' +
@@ -825,6 +1169,8 @@ const D = {
     if (this.charts[id]) this.charts[id].destroy();
     const ctx = document.getElementById(id);
     if (!ctx) return;
+    const existingEmpty = ctx.parentElement?.querySelector('.empty-state');
+    if (existingEmpty) existingEmpty.remove();
     const opts = {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: (data.datasets || []).length > 1, labels: { color: '#94a3b8', boxWidth: 12, padding: 10 } } },
@@ -839,19 +1185,14 @@ const D = {
     const canvas = document.getElementById(id);
     if (!canvas) return;
     const parent = canvas.parentElement;
-    if (!parent.querySelector('.empty-state')) {
-      const div = document.createElement('div');
-      div.className = 'empty-state';
-      div.innerHTML = '<div class="icon">&#128202;</div>No data available';
-      div.style.position = 'absolute';
-      div.style.inset = '0';
-      div.style.display = 'flex';
-      div.style.flexDirection = 'column';
-      div.style.alignItems = 'center';
-      div.style.justifyContent = 'center';
-      parent.style.position = 'relative';
-      parent.appendChild(div);
-    }
+    const existing = parent.querySelector('.empty-state');
+    if (existing) existing.remove();
+    const div = document.createElement('div');
+    div.className = 'empty-state';
+    div.innerHTML = '<div class="icon">&#128202;</div>No data available';
+    div.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center';
+    parent.style.position = 'relative';
+    parent.appendChild(div);
   },
 
   corrColor(v) {
@@ -865,12 +1206,23 @@ const D = {
   },
 
   shortName(n) {
-    const map = { volatility_1h: 'vol_1h', macd_signal: 'macd_s', macd_hist: 'macd_h', volume_1h: 'vol1h', volume_5m: 'vol5m', spread_bps: 'sp_bps', mid_price: 'mid_p' };
+    const map = {
+      volatility_1h: 'vol_1h', macd_signal: 'macd_s', macd_hist: 'macd_h',
+      volume_1h: 'vol1h', volume_5m: 'vol5m', spread_bps: 'sp_bps',
+      mid_price: 'mid_p', rsi_14: 'rsi', ma_1h: 'ma_1h', ma_5m: 'ma_5m',
+      volatility_5m: 'vol_5m',
+    };
     return map[n] || n;
+  },
+
+  truncate(s, max) {
+    if (!s) return '—';
+    return s.length > max ? s.substring(0, max) + '...' : s;
   },
 
   fmtN(n) {
     if (n == null) return '—';
+    if (typeof n === 'number' && n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
     if (typeof n === 'number' && n >= 1000) return (n / 1000).toFixed(1) + 'K';
     return String(n);
   },
