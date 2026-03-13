@@ -8,21 +8,27 @@ from sqlalchemy.orm import Session
 
 from api.schemas import (
     AnalyticsOut,
+    FeatureCorrelationOut,
     FeatureOut,
     FeaturesList,
+    FeatureSummaryOut,
     MarketOut,
     MarketsList,
     NewsList,
     NewsOut,
     OrderbookList,
     OrderbookOut,
+    PnlPointOut,
     ResultOut,
     ResultsList,
+    SignalBucketOut,
     SignalOut,
     SignalsList,
+    SpreadPointOut,
     StatusOut,
     TradeOut,
     TradesList,
+    TradeStatOut,
 )
 from db import get_db
 from server import _get_status
@@ -121,28 +127,47 @@ def _get_market(session: Session, market_id: str) -> MarketOut | None:
     )
 
 
-def _get_trades(session: Session, market_id: str | None, limit: int = 100, offset: int = 0) -> TradesList:
+def _get_trades(
+    session: Session,
+    market_id: str | None,
+    limit: int = 100,
+    offset: int = 0,
+    after_id: int | None = None,
+) -> TradesList:
     limit, offset = _clamp_pagination(limit, offset)
+    params: dict = {"lim": limit}
+
+    if after_id is not None:
+        cursor_clause = "AND id < :after_id " if market_id else "WHERE id < :after_id "
+        params["after_id"] = after_id
+    else:
+        cursor_clause = ""
+
     if market_id:
+        params["m"] = market_id
         total = session.execute(
             text("SELECT COUNT(*) FROM trades WHERE market_id = :m"),
             {"m": market_id},
         ).scalar() or 0
+        where = "WHERE market_id = :m " + cursor_clause
         rows = session.execute(
             text(
-                "SELECT id, ts, market_id, price, size, side "
-                "FROM trades WHERE market_id = :m ORDER BY ts DESC LIMIT :lim OFFSET :off"
+                f"SELECT id, ts, market_id, price, size, side "
+                f"FROM trades {where}ORDER BY id DESC LIMIT :lim"
+                + ("" if after_id is not None else " OFFSET :off")
             ),
-            {"m": market_id, "lim": limit, "off": offset},
+            {**params, "off": offset},
         ).fetchall()
     else:
         total = session.execute(text("SELECT COUNT(*) FROM trades")).scalar() or 0
+        where = cursor_clause if cursor_clause else ""
         rows = session.execute(
             text(
-                "SELECT id, ts, market_id, price, size, side "
-                "FROM trades ORDER BY ts DESC LIMIT :lim OFFSET :off"
+                f"SELECT id, ts, market_id, price, size, side "
+                f"FROM trades {where}ORDER BY id DESC LIMIT :lim"
+                + ("" if after_id is not None else " OFFSET :off")
             ),
-            {"lim": limit, "off": offset},
+            {**params, "off": offset},
         ).fetchall()
     items = [
         TradeOut(
@@ -283,9 +308,10 @@ def list_trades(
     session: Session = Depends(get_db),
     limit: int = Query(default=100, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
+    after_id: int | None = Query(default=None, description="Cursor: return rows with id < after_id"),
 ):
-    """List trades, optionally filtered by market_id."""
-    return _get_trades(session, market_id=market_id, limit=limit, offset=offset)
+    """List trades, optionally filtered by market_id. Supports cursor pagination via after_id."""
+    return _get_trades(session, market_id=market_id, limit=limit, offset=offset, after_id=after_id)
 
 
 @router.get("/orderbook", response_model=OrderbookList)
@@ -429,12 +455,12 @@ def _get_analytics(session: Session) -> AnalyticsOut:
             "ORDER BY trade_count DESC LIMIT 20"
         )).fetchall()
         result.trade_stats = [
-            {
-                "market_id": r[0], "question": r[1], "trade_count": r[2],
-                "total_volume": round(_safe_float(r[3]), 4),
-                "avg_price": round(_safe_float(r[4]), 4),
-                "buy_count": r[5], "sell_count": r[6],
-            }
+            TradeStatOut(
+                market_id=r[0], question=r[1], trade_count=r[2],
+                total_volume=round(_safe_float(r[3]), 4),
+                avg_price=round(_safe_float(r[4]), 4),
+                buy_count=r[5], sell_count=r[6],
+            )
             for r in rows
         ]
     except Exception as exc:
@@ -447,13 +473,13 @@ def _get_analytics(session: Session) -> AnalyticsOut:
             "FROM features GROUP BY feature_name ORDER BY feature_name"
         )).fetchall()
         result.feature_summary = [
-            {
-                "name": r[0],
-                "mean": round(_safe_float(r[1]), 6),
-                "min": round(_safe_float(r[2]), 6),
-                "max": round(_safe_float(r[3]), 6),
-                "count": r[4],
-            }
+            FeatureSummaryOut(
+                name=r[0],
+                mean=round(_safe_float(r[1]), 6),
+                min=round(_safe_float(r[2]), 6),
+                max=round(_safe_float(r[3]), 6),
+                count=r[4],
+            )
             for r in rows
         ]
     except Exception as exc:
@@ -465,7 +491,7 @@ def _get_analytics(session: Session) -> AnalyticsOut:
             "FROM signals GROUP BY bucket ORDER BY bucket"
         )).fetchall()
         result.signal_distribution = [
-            {"bucket": _safe_float(r[0]), "count": r[1]} for r in rows
+            SignalBucketOut(bucket=_safe_float(r[0]), count=r[1]) for r in rows
         ]
     except Exception as exc:
         logger.debug("Analytics query error: %s", exc)
@@ -479,11 +505,11 @@ def _get_analytics(session: Session) -> AnalyticsOut:
             "FROM orderbook ORDER BY ts DESC LIMIT 200"
         )).fetchall()
         result.spread_timeline = [
-            {
-                "ts": str(r[0]),
-                "spread": round(_safe_float(r[1]), 6),
-                "spread_bps": round(_safe_float(r[2]), 2),
-            }
+            SpreadPointOut(
+                ts=str(r[0]),
+                spread=round(_safe_float(r[1]), 6),
+                spread_bps=round(_safe_float(r[2]), 2),
+            )
             for r in rows
         ]
     except Exception as exc:
@@ -497,11 +523,11 @@ def _get_analytics(session: Session) -> AnalyticsOut:
         pnl = []
         for r in rows:
             cumulative += _safe_float(r[2])
-            pnl.append({
-                "ts": str(r[0]), "market_id": r[1],
-                "profit": round(_safe_float(r[2]), 4),
-                "cumulative": round(cumulative, 4),
-            })
+            pnl.append(PnlPointOut(
+                ts=str(r[0]), market_id=r[1],
+                profit=round(_safe_float(r[2]), 4),
+                cumulative=round(cumulative, 4),
+            ))
         result.pnl_timeline = pnl
     except Exception as exc:
         logger.debug("Analytics query error: %s", exc)
@@ -559,10 +585,10 @@ def _get_analytics(session: Session) -> AnalyticsOut:
                         v2.append(pt[f2])
                 if len(v1) >= 5:
                     corr = _pearson(v1, v2)
-                    correlations.append({
-                        "feature_1": f1, "feature_2": f2,
-                        "correlation": round(corr, 3),
-                    })
+                    correlations.append(FeatureCorrelationOut(
+                        feature_1=f1, feature_2=f2,
+                        correlation=round(corr, 3),
+                    ))
         result.feature_correlations = correlations
     except Exception as exc:
         logger.debug("Analytics query error: %s", exc)
