@@ -33,12 +33,31 @@ def prepare_xy(df: pd.DataFrame, target_col: str = "target") -> tuple[pd.DataFra
     return X, y
 
 
+class _ConstantClassifier:
+    """Fallback when training data has only one class."""
+
+    def __init__(self, constant_class: int, n_classes: int = 2):
+        self.constant = constant_class
+        self.classes_ = np.arange(n_classes)
+
+    def predict(self, X):
+        return np.full(len(X), self.constant)
+
+    def predict_proba(self, X):
+        proba = np.zeros((len(X), len(self.classes_)))
+        proba[:, self.constant] = 1.0
+        return proba
+
+
 def train_baseline(
     X_train: pd.DataFrame,
     y_train: pd.Series,
     model_type: str = "logistic",
 ) -> Any:
-    """Train baseline model (LR or RF)."""
+    """Train baseline model (LR or RF). Falls back to constant if single class."""
+    unique_classes = np.unique(y_train)
+    if len(unique_classes) < 2:
+        return _ConstantClassifier(int(unique_classes[0]))
     if model_type == "random_forest":
         model = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
     else:

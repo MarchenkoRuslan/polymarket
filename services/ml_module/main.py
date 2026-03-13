@@ -53,37 +53,43 @@ def run():
         session.commit()
 
         for mid in markets[:20]:
-            df = load_trades_with_target(session, mid)
-            if df.empty or len(df) < 10:
-                continue
-            available = [c for c in FEATURE_COLS if c in df.columns]
-            if not available:
-                continue
-            X, y = prepare_xy(df, "target")
-            n_splits = min(5, max(2, len(X) // 10))
-            metrics = walk_forward_validate(X, y, n_splits=n_splits, model_type="logistic")
-            logger.info(
-                "Market %s: AUC=%.3f P=%.3f R=%.3f",
-                mid[:16], metrics["roc_auc"], metrics["precision"], metrics["recall"],
-            )
-
-            # Train on all-but-last chunk, predict only the unseen tail
-            split_idx = int(len(X) * 0.8)
-            if split_idx < 5:
-                continue
-            X_train, X_oos = X.iloc[:split_idx], X.iloc[split_idx:]
-            y_train = y.iloc[:split_idx]
-            if X_oos.empty:
-                continue
-            model = train_baseline(X_train, y_train, "logistic")
-            proba = model.predict_proba(X_oos)[:, 1]
-            ts_oos = df["ts"].iloc[split_idx:]
-            for ts, p in zip(ts_oos, proba):
-                session.execute(
-                    text("INSERT INTO signals (ts, market_id, prediction) VALUES (:ts, :m, :p)"),
-                    {"ts": ts, "m": mid, "p": float(p)},
+            try:
+                df = load_trades_with_target(session, mid)
+                if df.empty or len(df) < 10:
+                    continue
+                available = [c for c in FEATURE_COLS if c in df.columns]
+                if not available:
+                    continue
+                X, y = prepare_xy(df, "target")
+                if len(y.unique()) < 2:
+                    logger.info("Market %s: single class in target, skipping", mid[:16])
+                    continue
+                n_splits = min(5, max(2, len(X) // 10))
+                metrics = walk_forward_validate(X, y, n_splits=n_splits, model_type="logistic")
+                logger.info(
+                    "Market %s: AUC=%.3f P=%.3f R=%.3f",
+                    mid[:16], metrics["roc_auc"], metrics["precision"], metrics["recall"],
                 )
-            session.commit()
+
+                split_idx = int(len(X) * 0.8)
+                if split_idx < 5:
+                    continue
+                X_train, X_oos = X.iloc[:split_idx], X.iloc[split_idx:]
+                y_train = y.iloc[:split_idx]
+                if X_oos.empty:
+                    continue
+                model = train_baseline(X_train, y_train, "logistic")
+                proba = model.predict_proba(X_oos)[:, 1]
+                ts_oos = df["ts"].iloc[split_idx:]
+                for ts, p in zip(ts_oos, proba):
+                    session.execute(
+                        text("INSERT INTO signals (ts, market_id, prediction) VALUES (:ts, :m, :p)"),
+                        {"ts": ts, "m": mid, "p": float(p)},
+                    )
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                logger.warning("Market %s: ML failed: %s", mid[:16], e)
     except Exception as e:
         session.rollback()
         logger.exception("%s", e)
