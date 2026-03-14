@@ -1,6 +1,6 @@
 """Insert demo data for local testing (no API/PMXT needed)."""
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -11,7 +11,7 @@ from services.collector.db_writer import upsert_market, insert_trade
 def main():
     session = SessionLocal()
     try:
-        base = datetime(2025, 1, 1, 12, 0, 0)
+        base = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         upsert_market(session, {
             "id": "0x_demo_1",
             "question": "Demo market 1?",

@@ -485,7 +485,8 @@ class TestGetLatestTradeTs:
         ts = datetime(2025, 6, 1, 12, 0, 0)
         session.execute.return_value.fetchone.return_value = (ts,)
         result = get_latest_trade_ts(session, "m1")
-        assert result == ts
+        assert result == ts.replace(tzinfo=timezone.utc)
+        assert result.tzinfo is not None
 
     def test_returns_none_when_empty(self):
         session = MagicMock()
@@ -499,3 +500,4 @@ class TestGetLatestTradeTs:
         result = get_latest_trade_ts(session, "m1")
         assert result is not None
         assert result.year == 2025
+        assert result.tzinfo is not None
