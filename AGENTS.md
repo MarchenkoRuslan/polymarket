@@ -64,6 +64,7 @@ Default interval: 1 hour (`COLLECT_INTERVAL_SEC=3600`).
 | `POLYMARKET_PRIVATE_KEY` | (empty) | Ethereum private key for CLOB L2 auth. Enables real trade data with buy/sell sides |
 | `POLYMARKET_API_KEY/SECRET/PASSPHRASE` | (empty) | Pre-derived API credentials (skip auto-derivation) |
 | `COLLECT_INTERVAL_SEC` | `3600` | Pipeline cycle interval (seconds) |
+| `SKIP_ML_FIRST_RUN` | `true` | Skip ML/backtest on first run for faster initial dashboard data |
 | `COLLECT_MARKETS_LIMIT` | `0` | Max markets per cycle (0 = all liquid) |
 | `MIN_MARKET_VOLUME` | `1000` | Minimum Gamma API volume for a market to be "liquid" |
 | `ML_TARGET_HORIZON` | `5` | Predict price up within next N periods |
