@@ -18,6 +18,7 @@ from config.settings import (
     MIN_MARKET_VOLUME,
     TELEGRAM_BOT_TOKEN,
     WEBAPP_URL,
+    SKIP_ML_FIRST_RUN,
 )
 
 __all__ = [
@@ -40,4 +41,5 @@ __all__ = [
     "MIN_MARKET_VOLUME",
     "TELEGRAM_BOT_TOKEN",
     "WEBAPP_URL",
+    "SKIP_ML_FIRST_RUN",
 ]

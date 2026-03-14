@@ -23,6 +23,7 @@ Add to service Settings → Variables:
 | `API_RATE_LIMIT` | `60` | optional |
 | `COLLECT_INTERVAL_SEC` | `3600` (1 hour) | optional |
 | `COLLECT_DEFER_SEC` | `5` | optional |
+| `SKIP_ML_FIRST_RUN` | `true` | optional — skip ML/backtest on first run for faster initial dashboard data |
 | `MIN_MARKET_VOLUME` | `1000` | optional |
 | `ML_TARGET_HORIZON` | `5` | optional |
 
@@ -68,6 +69,8 @@ Main service — FastAPI (`api.app`):
 ```
 cleanup (dedup trades) → collector → news → features → ML → backtest
 ```
+
+With `SKIP_ML_FIRST_RUN=true` (default), the first run is light: collector + news + features only. Dashboard shows markets, trades, orderbook, features within 2–5 min. ML and backtest run on the next cycle (~1 hour later).
 
 ### What populates each table
 

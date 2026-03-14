@@ -4,6 +4,8 @@ import os
 import threading
 import time
 
+from config import SKIP_ML_FIRST_RUN
+
 logger = logging.getLogger(__name__)
 
 _state_lock = threading.Lock()
@@ -182,8 +184,12 @@ def cleanup_stale_data():
         logger.warning("Data cleanup error (non-fatal): %s", e)
 
 
-def run_pipeline():
-    """Run full pipeline: cleanup → collector → news → feature_store → ml_module → backtester."""
+def run_pipeline(*, skip_ml: bool = False):
+    """Run pipeline: cleanup → collector → news → feature_store → [ml_module → backtester].
+
+    When skip_ml=True (first run with SKIP_ML_FIRST_RUN), runs only collector + news + features
+    for faster initial dashboard data; ML and backtest run on the next cycle.
+    """
     global _last_pipeline_error
     with _state_lock:
         _last_pipeline_error = None
@@ -203,6 +209,9 @@ def run_pipeline():
             _last_pipeline_error = str(e)
         logger.warning("Pipeline: features failed, skipping ML")
         return
+    if skip_ml:
+        logger.info("Pipeline cycle completed (light: collector+news+features, ML/backtest skipped)")
+        return
     try:
         run_ml()
     except Exception as e:
@@ -213,19 +222,25 @@ def run_pipeline():
 
 
 def pipeline_loop():
-    """Background loop: full pipeline on startup, then every 15 min.
+    """Background loop: full pipeline on startup, then every COLLECT_INTERVAL_SEC.
 
-    Applies exponential backoff (up to 1h) on consecutive failures.
+    First run may be light (collector+news+features only) when SKIP_ML_FIRST_RUN=true
+    for faster initial dashboard data. Applies exponential backoff (up to 1h) on failures.
     """
     interval = int(os.environ.get("COLLECT_INTERVAL_SEC", "3600"))
     defer = int(os.environ.get("COLLECT_DEFER_SEC", "5"))
     max_backoff = 3600
     consecutive_failures = 0
+    first_run = True
     time.sleep(defer)
     while True:
+        skip_ml = first_run and SKIP_ML_FIRST_RUN
+        if skip_ml:
+            logger.info("First pipeline run (light): skipping ML and backtest")
         try:
-            run_pipeline()
+            run_pipeline(skip_ml=skip_ml)
             consecutive_failures = 0
+            first_run = False
         except Exception:
             consecutive_failures += 1
             logger.exception("Pipeline loop error (consecutive: %d)", consecutive_failures)
