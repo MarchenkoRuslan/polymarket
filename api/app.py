@@ -8,6 +8,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -16,6 +17,12 @@ import server
 from server import init_db, pipeline_loop
 
 logger = logging.getLogger(__name__)
+
+_CORS_ORIGINS = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "*").split(",")
+    if o.strip()
+]
 
 _RATE_LIMIT_RPM = int(os.getenv("API_RATE_LIMIT_RPM", "120"))
 _rate_store: dict[str, list[float]] = defaultdict(list)
@@ -44,6 +51,13 @@ app = FastAPI(
     description="REST API for Polymarket trading system",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_CORS_ORIGINS,
+    allow_methods=["GET"],
+    allow_headers=["*"],
 )
 
 
