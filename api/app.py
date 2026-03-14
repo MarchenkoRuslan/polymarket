@@ -4,13 +4,11 @@ import os
 import threading
 import time
 from collections import defaultdict
-from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
-from fastapi.staticfiles import StaticFiles
 
 from api.routes import router
 import server
@@ -114,7 +112,3 @@ async def cache_control_middleware(request: Request, call_next):
 
 
 app.include_router(router)
-
-_webapp_dir = Path(__file__).resolve().parent.parent / "webapp"
-if _webapp_dir.is_dir():
-    app.mount("/webapp", StaticFiles(directory=str(_webapp_dir), html=True), name="webapp")

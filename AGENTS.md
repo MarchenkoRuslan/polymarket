@@ -10,8 +10,8 @@ Automated system for trading on Polymarket prediction markets. Full pipeline: da
 
 | Service | Path | Task |
 |---------|------|------|
-| **Web API** | `api/` | FastAPI, Swagger UI (`/docs`), Web App (`/webapp`). Endpoints: markets, trades, orderbook, signals, features, news, results, analytics, status. Lifespan: init_db + pipeline in background |
-| **Web App** | `webapp/` | Telegram Web App (Mini App) — mobile-first SPA dashboard. Vanilla JS + ES modules, Chart.js, Telegram theme integration. Served as static files at `/webapp` |
+| **Web API** | `api/` | FastAPI, Swagger UI (`/docs`), REST API (`/api/v1/*`). Endpoints: markets, trades, orderbook, signals, features, news, results, analytics, status. Lifespan: init_db + pipeline in background |
+| **Web App** | [polymarket-ui](https://github.com/MarchenkoRuslan/polymarket-ui) | Telegram Web App (Mini App) — separate repo. Vanilla JS + Chart.js. Connects to this API via `CORS_ORIGINS` |
 | Web Server | `server.py` | uvicorn + same FastAPI app. Pipeline in background. For Railway/production |
 | Data Collector | `services/collector/` | Polymarket API (Gamma, CLOB with optional L2 auth), PMXT Parquet → `markets`, `trades`, `orderbook`. Filters to liquid markets only |
 | News Collector | `services/news_collector/` | RSS (synchronous) → keyword filter → `news` table |
@@ -75,7 +75,7 @@ Default interval: 1 hour (`COLLECT_INTERVAL_SEC=3600`).
 | `FEATURE_MARKETS_LIMIT` | `50` | Max markets for feature computation |
 | `BACKTEST_MARKETS_LIMIT` | `15` | Max markets for backtesting |
 | `TELEGRAM_BOT_TOKEN` | (empty) | Telegram bot token from BotFather |
-| `WEBAPP_URL` | (empty) | HTTPS URL of Web App (e.g. https://your-domain.com/webapp) |
+| `WEBAPP_URL` | (empty) | HTTPS URL of deployed [polymarket-ui](https://github.com/MarchenkoRuslan/polymarket-ui) |
 
 ## Common Tasks
 

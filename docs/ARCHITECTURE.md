@@ -18,8 +18,8 @@
 ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐
 │  Web API    │  │ Feature     │  │   ML Module     │
 │  FastAPI    │  │ Store       │  │ (LR, RF, XGB)   │
-│  Dashboard  │  │ (MA, RSI)   │  └────────┬────────┘
-│  /api/v1/*  │  └──────┬──────┘           │
+│  /api/v1/*  │  │ (MA, RSI)   │  └────────┬────────┘
+│  /docs      │  └──────┬──────┘           │
 └─────────────┘         └──────────┬───────┘
                                    ▼
                         ┌─────────────────────┐
@@ -66,7 +66,6 @@ The collector supports optional L2 authentication via `py-clob-client`:
 | Path | Description |
 |------|-------------|
 | `GET /docs` | Swagger UI |
-| `GET /dashboard` | Visual dashboard (Overview, Trading, Technical, Signals, Performance, News). Fetches market-specific data on selection |
 | `GET /api/v1/markets` | Market list (limit, offset, with_signals) |
 | `GET /api/v1/markets/{market_id}` | Single market |
 | `GET /api/v1/trades` | Trades (market_id optional, limit, offset, after_id cursor) |
