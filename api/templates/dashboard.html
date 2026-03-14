@@ -366,6 +366,7 @@ const D = {
   async onMarketChange() {
     const mid = this.getSelectedMarketId();
     if (mid) {
+      document.getElementById('lastUpdated').innerHTML = '<span class="loading-spinner"></span> Loading market data...';
       const [trades, signals, features, orderbook] = await Promise.all([
         this.fetch('/trades?market_id=' + encodeURIComponent(mid) + '&limit=500'),
         this.fetch('/signals?market_id=' + encodeURIComponent(mid) + '&limit=500'),
@@ -376,6 +377,7 @@ const D = {
       this.data.marketSignals = signals;
       this.data.marketFeatures = features;
       this.data.marketOrderbook = orderbook;
+      document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
     } else {
       this.data.marketTrades = null;
       this.data.marketSignals = null;
