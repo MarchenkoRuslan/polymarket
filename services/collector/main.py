@@ -12,12 +12,16 @@ from config import (
     API_RATE_LIMIT,
     COLLECT_MARKETS_LIMIT,
     DEFAULT_FEE_BPS,
+    MIN_MARKET_VOLUME,
     POLYMARKET_CLOB_API,
     POLYMARKET_GAMMA_API,
+    POLYMARKET_PRIVATE_KEY,
+    POLYMARKET_API_KEY,
+    POLYMARKET_API_SECRET,
+    POLYMARKET_API_PASSPHRASE,
 )
 from db import SessionLocal
 from services.collector.polymarket_client import PolymarketClient
-from sqlalchemy import text as sa_text
 from services.collector.db_writer import (
     upsert_market,
     insert_trade,
@@ -99,6 +103,103 @@ def _extract_market_id(market: dict) -> str:
     return str(mid)
 
 
+def _is_liquid(market: dict, min_volume: float = 1000) -> bool:
+    """Check if a market has enough liquidity to be worth collecting."""
+    try:
+        volume = float(market.get("volume") or market.get("volumeNum") or 0)
+    except (TypeError, ValueError):
+        volume = 0
+    if volume >= min_volume:
+        return True
+    raw_bid = market.get("bestBid")
+    raw_ask = market.get("bestAsk")
+    if raw_bid and raw_ask:
+        try:
+            bid = float(raw_bid)
+            ask = float(raw_ask)
+            if 0 < bid < 1 and 0 < ask < 1:
+                return True
+        except (TypeError, ValueError):
+            pass
+    return False
+
+
+def _init_clob_client():
+    """Initialize py-clob-client with L2 auth if credentials are available."""
+    if not POLYMARKET_PRIVATE_KEY:
+        return None
+    try:
+        from py_clob_client.client import ClobClient
+        from py_clob_client.clob_types import ApiCreds
+
+        creds = None
+        if POLYMARKET_API_KEY and POLYMARKET_API_SECRET and POLYMARKET_API_PASSPHRASE:
+            creds = ApiCreds(
+                api_key=POLYMARKET_API_KEY,
+                api_secret=POLYMARKET_API_SECRET,
+                api_passphrase=POLYMARKET_API_PASSPHRASE,
+            )
+
+        client = ClobClient(
+            host=POLYMARKET_CLOB_API,
+            chain_id=137,
+            key=POLYMARKET_PRIVATE_KEY,
+            creds=creds,
+        )
+
+        if creds is None:
+            logger.info("Deriving CLOB API credentials from private key...")
+            derived = client.create_or_derive_api_creds()
+            client.set_api_creds(derived)
+            logger.info("CLOB API credentials derived successfully")
+
+        logger.info("CLOB client initialized with L2 authentication")
+        return client
+    except Exception as e:
+        logger.warning("Failed to init CLOB client: %s", e)
+        return None
+
+
+def _fetch_clob_trades(clob_client, condition_id: str, limit: int = 100) -> list[dict]:
+    """Fetch real trades from CLOB API using authenticated client."""
+    if clob_client is None:
+        return []
+    try:
+        from py_clob_client.clob_types import TradeParams
+        result = clob_client.get_trades(
+            params=TradeParams(market=condition_id),
+        )
+        trades = []
+        raw = result if isinstance(result, list) else (result.get("data", []) if isinstance(result, dict) else [])
+        for rt in raw[:limit]:
+            if not isinstance(rt, dict):
+                continue
+            ts_raw = rt.get("match_time") or rt.get("timestamp") or rt.get("t")
+            if ts_raw is None:
+                continue
+            if isinstance(ts_raw, str):
+                try:
+                    ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+                except (ValueError, TypeError):
+                    continue
+            else:
+                ts = datetime.fromtimestamp(
+                    ts_raw / 1000 if ts_raw > 1e12 else ts_raw, tz=timezone.utc
+                )
+            price = float(rt.get("price", 0))
+            if price <= 0 or price >= 1:
+                continue
+            size = float(rt.get("size", rt.get("amount", 1.0)))
+            side = str(rt.get("side", "buy")).lower()
+            if side not in ("buy", "sell"):
+                side = "buy"
+            trades.append({"ts": ts, "price": price, "size": size, "side": side})
+        return trades
+    except Exception as e:
+        logger.debug("CLOB trades for %s: %s", condition_id[:16], e)
+        return []
+
+
 async def _collect_orderbook(
     client: PolymarketClient,
     session,
@@ -153,30 +254,11 @@ async def _collect_orderbook(
     return False
 
 
-def _get_latest_trade_ts(session, market_id: str) -> datetime | None:
-    """Get the latest trade timestamp for a market."""
-    row = session.execute(
-        sa_text("SELECT MAX(ts) FROM trades WHERE market_id = :m"),
-        {"m": market_id},
-    ).fetchone()
-    if row and row[0]:
-        ts_val = row[0]
-        if isinstance(ts_val, str):
-            try:
-                return datetime.fromisoformat(ts_val).replace(tzinfo=timezone.utc)
-            except (ValueError, TypeError):
-                return None
-        if isinstance(ts_val, datetime):
-            if ts_val.tzinfo is None:
-                return ts_val.replace(tzinfo=timezone.utc)
-            return ts_val
-    return None
-
-
 async def collect_from_api():
     """Collect markets and sample data from Polymarket API."""
     rate_delay = 60.0 / max(API_RATE_LIMIT, 10) if API_RATE_LIMIT else 0.1
     client = PolymarketClient(POLYMARKET_GAMMA_API, POLYMARKET_CLOB_API, rate_limit_delay=rate_delay)
+    clob_client = _init_clob_client()
     session = SessionLocal()
     try:  # noqa: SIM117
         events = await client.get_events_paginated(
@@ -192,13 +274,20 @@ async def collect_from_api():
         session.commit()
         logger.info("Upserted %d markets from %d events", len(markets), len(events))
 
+        liquid_markets = [m for m in markets if _is_liquid(m, MIN_MARKET_VOLUME)]
+        logger.info(
+            "Liquid markets: %d / %d (min_volume=%.0f)",
+            len(liquid_markets), len(markets), MIN_MARKET_VOLUME,
+        )
+
         now = datetime.now(timezone.utc)
         loaded = 0
         ob_loaded = 0
+        clob_trades_loaded = 0
 
-        target_markets = markets
+        target_markets = liquid_markets
         if COLLECT_MARKETS_LIMIT > 0:
-            target_markets = markets[:COLLECT_MARKETS_LIMIT]
+            target_markets = liquid_markets[:COLLECT_MARKETS_LIMIT]
 
         for m in target_markets:
             mid = _extract_market_id(m)
@@ -207,40 +296,18 @@ async def collect_from_api():
 
             token_ids = _parse_clob_token_ids(m.get("clobTokenIds"))
             asset_id = token_ids[0] if token_ids else mid
+            condition_id = m.get("conditionId") or m.get("condition_id") or mid
 
-            real_trades_loaded = 0
-            try:
-                raw_trades = await client.get_trades(market_id=mid, limit=100)
-                for rt in raw_trades:
-                    ts_raw = rt.get("t") or rt.get("timestamp") or rt.get("ts") or rt.get("match_time")
-                    if ts_raw is None:
-                        continue
-                    if isinstance(ts_raw, str):
-                        try:
-                            ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
-                        except (ValueError, TypeError):
-                            continue
-                    else:
-                        ts = datetime.fromtimestamp(
-                            ts_raw / 1000 if ts_raw > 1e12 else ts_raw, tz=timezone.utc
-                        )
-                    price = float(rt.get("price", 0))
-                    if price <= 0 or price >= 1:
-                        continue
-                    size = float(rt.get("size", rt.get("amount", 1.0)))
-                    side = str(rt.get("side", rt.get("type", "buy"))).lower()
-                    if side not in ("buy", "sell"):
-                        side = "buy"
-                    insert_trade(session, mid, ts, price, size, side)
-                    real_trades_loaded += 1
+            real_trades = _fetch_clob_trades(clob_client, condition_id, limit=200)
+            for rt in real_trades:
+                if insert_trade(session, mid, rt["ts"], rt["price"], rt["size"], rt["side"]):
+                    clob_trades_loaded += 1
                     loaded += 1
-            except Exception as e:
-                logger.debug("CLOB trades for %s unavailable: %s", mid, e)
 
-            if real_trades_loaded == 0:
+            if not real_trades:
                 history = []
                 try:
-                    history = await client.get_prices_history(asset_id, interval="max")
+                    history = await client.get_prices_history(asset_id, interval="1d")
                 except Exception as e:
                     logger.debug("Price history for %s unavailable: %s", mid, e)
                 for pt in history:
@@ -253,8 +320,8 @@ async def collect_from_api():
                     price = float(pt.get("p", pt.get("price", 0)))
                     if price <= 0 or price >= 1:
                         continue
-                    insert_trade(session, mid, ts, price, 1.0, "buy")
-                    loaded += 1
+                    if insert_trade(session, mid, ts, price, 1.0, "buy"):
+                        loaded += 1
                 if not history:
                     price_val = None
                     last_trade = m.get("lastTradePrice")
@@ -266,8 +333,8 @@ async def collect_from_api():
                     if price_val is None or not (0 < price_val < 1):
                         price_val = _parse_outcome_prices(m.get("outcomePrices"))
                     if price_val is not None and 0 < price_val < 1:
-                        insert_trade(session, mid, now, price_val, 1.0, "buy")
-                        loaded += 1
+                        if insert_trade(session, mid, now, price_val, 1.0, "buy"):
+                            loaded += 1
 
             ob_ok = await _collect_orderbook(client, session, m, mid, asset_id, now)
             if ob_ok:
@@ -275,12 +342,12 @@ async def collect_from_api():
 
             upsert_fee_rate(session, asset_id, DEFAULT_FEE_BPS)
 
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.05)
         if loaded or ob_loaded:
             session.commit()
             logger.info(
-                "Loaded %d price points, %d orderbook snapshots from API",
-                loaded, ob_loaded,
+                "Loaded %d price points (%d real CLOB trades), %d orderbook snapshots",
+                loaded, clob_trades_loaded, ob_loaded,
             )
         else:
             logger.warning("No price points or orderbook data loaded from API")

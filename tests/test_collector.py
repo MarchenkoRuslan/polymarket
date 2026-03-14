@@ -311,15 +311,15 @@ async def test_collect_orderbook_invalid_gamma_prices():
 
 
 @pytest.mark.asyncio
-async def test_collect_from_api_processes_all_markets_by_default():
-    """collect_from_api processes all markets when COLLECT_MARKETS_LIMIT=0."""
+async def test_collect_from_api_processes_all_liquid_markets():
+    """collect_from_api processes all liquid markets when COLLECT_MARKETS_LIMIT=0."""
     from services.collector.main import collect_from_api
 
     events = [
         {
             "id": "e1",
             "markets": [
-                {"id": f"m{i}", "question": f"Q{i}", "clobTokenIds": [f"tok{i}"]}
+                {"id": f"m{i}", "question": f"Q{i}", "clobTokenIds": [f"tok{i}"], "volume": "5000"}
                 for i in range(5)
             ],
         }
@@ -339,6 +339,7 @@ async def test_collect_from_api_processes_all_markets_by_default():
         patch("services.collector.main.PolymarketClient", return_value=mock_client),
         patch("services.collector.main.SessionLocal", return_value=mock_session),
         patch("services.collector.main.COLLECT_MARKETS_LIMIT", 0),
+        patch("services.collector.main._init_clob_client", return_value=None),
     ):
         await collect_from_api()
 
@@ -354,7 +355,7 @@ async def test_collect_from_api_respects_markets_limit():
         {
             "id": "e1",
             "markets": [
-                {"id": f"m{i}", "question": f"Q{i}", "clobTokenIds": [f"tok{i}"]}
+                {"id": f"m{i}", "question": f"Q{i}", "clobTokenIds": [f"tok{i}"], "volume": "5000"}
                 for i in range(10)
             ],
         }
@@ -374,6 +375,7 @@ async def test_collect_from_api_respects_markets_limit():
         patch("services.collector.main.PolymarketClient", return_value=mock_client),
         patch("services.collector.main.SessionLocal", return_value=mock_session),
         patch("services.collector.main.COLLECT_MARKETS_LIMIT", 3),
+        patch("services.collector.main._init_clob_client", return_value=None),
     ):
         await collect_from_api()
 
@@ -389,8 +391,8 @@ async def test_collect_from_api_inserts_fee_rates():
         {
             "id": "e1",
             "markets": [
-                {"id": "m1", "question": "Q1", "clobTokenIds": ["tok1"]},
-                {"id": "m2", "question": "Q2", "clobTokenIds": ["tok2"]},
+                {"id": "m1", "question": "Q1", "clobTokenIds": ["tok1"], "volume": "5000"},
+                {"id": "m2", "question": "Q2", "clobTokenIds": ["tok2"], "volume": "5000"},
             ],
         }
     ]
@@ -410,6 +412,7 @@ async def test_collect_from_api_inserts_fee_rates():
         patch("services.collector.main.SessionLocal", return_value=mock_session),
         patch("services.collector.main.COLLECT_MARKETS_LIMIT", 0),
         patch("services.collector.main.upsert_fee_rate") as mock_fee,
+        patch("services.collector.main._init_clob_client", return_value=None),
     ):
         await collect_from_api()
 

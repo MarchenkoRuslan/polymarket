@@ -48,8 +48,17 @@ DATABASE_URL = _apply_sslmode(_db_url, DATABASE_SSLMODE)
 POLYMARKET_CLOB_API = os.getenv("POLYMARKET_CLOB_API", "https://clob.polymarket.com")
 POLYMARKET_GAMMA_API = os.getenv("POLYMARKET_GAMMA_API", "https://gamma-api.polymarket.com")
 
+# CLOB authentication (optional, enables real trade data)
+POLYMARKET_PRIVATE_KEY = os.getenv("POLYMARKET_PRIVATE_KEY", "")
+POLYMARKET_API_KEY = os.getenv("POLYMARKET_API_KEY", "")
+POLYMARKET_API_SECRET = os.getenv("POLYMARKET_API_SECRET", "")
+POLYMARKET_API_PASSPHRASE = os.getenv("POLYMARKET_API_PASSPHRASE", "")
+
 # PMXT archive
 PMXT_ARCHIVE_URL = os.getenv("PMXT_ARCHIVE_URL", "https://archive.pmxt.dev")
+
+# Minimum volume (Gamma API) to consider a market "liquid"
+MIN_MARKET_VOLUME = float(os.getenv("MIN_MARKET_VOLUME", "1000"))
 
 def _parse_int(name: str, default: str) -> int:
     val = os.getenv(name, default)
@@ -65,10 +74,13 @@ DEFAULT_FEE_BPS = _parse_int("DEFAULT_FEE_BPS", "30")
 # Rate limits (requests per minute)
 API_RATE_LIMIT = _parse_int("API_RATE_LIMIT", "100")
 
-# Max markets to collect detailed data (trades, orderbook) per cycle. 0 = all.
-COLLECT_MARKETS_LIMIT = _parse_int("COLLECT_MARKETS_LIMIT", "0")
+# Max markets to collect detailed data (trades, orderbook) per cycle. 0 = all liquid.
+COLLECT_MARKETS_LIMIT = _parse_int("COLLECT_MARKETS_LIMIT", "50")
 
 # Per-service market limits (0 = unlimited)
 FEATURE_MARKETS_LIMIT = _parse_int("FEATURE_MARKETS_LIMIT", "50")
 ML_MARKETS_LIMIT = _parse_int("ML_MARKETS_LIMIT", "20")
 BACKTEST_MARKETS_LIMIT = _parse_int("BACKTEST_MARKETS_LIMIT", "15")
+
+# Target horizon for ML (how many periods ahead to predict)
+ML_TARGET_HORIZON = _parse_int("ML_TARGET_HORIZON", "5")

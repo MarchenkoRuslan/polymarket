@@ -152,11 +152,58 @@ def run_backtest():
         logger.warning("Backtester error (non-fatal): %s", e)
 
 
+def cleanup_stale_data():
+    """Remove old duplicate/stale data to keep the DB lean.
+
+    - Deduplicate trades (keep only one per market_id+ts+price)
+    - Remove old trades beyond retention limit per market
+    - Remove orphan features for markets with no trades
+    """
+    try:
+        from db import SessionLocal
+        from sqlalchemy import text
+        session = SessionLocal()
+        try:
+            deleted_dupes = session.execute(text("""
+                DELETE FROM trades WHERE id NOT IN (
+                    SELECT MIN(id) FROM trades
+                    GROUP BY market_id, ts, price
+                )
+            """)).rowcount
+            if deleted_dupes:
+                logger.info("Cleanup: removed %d duplicate trades", deleted_dupes)
+
+            max_trades_per_market = int(os.environ.get("MAX_TRADES_PER_MARKET", "5000"))
+            over_limit = session.execute(text(
+                "SELECT market_id, COUNT(*) as cnt FROM trades "
+                "GROUP BY market_id HAVING COUNT(*) > :lim"
+            ), {"lim": max_trades_per_market}).fetchall()
+            trimmed = 0
+            for row in over_limit:
+                mid = row[0]
+                session.execute(text(
+                    "DELETE FROM trades WHERE market_id = :m AND id NOT IN ("
+                    "  SELECT id FROM trades WHERE market_id = :m "
+                    "  ORDER BY ts DESC LIMIT :lim"
+                    ")"
+                ), {"m": mid, "lim": max_trades_per_market})
+                trimmed += 1
+            if trimmed:
+                logger.info("Cleanup: trimmed trades for %d markets (max %d each)", trimmed, max_trades_per_market)
+
+            session.commit()
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning("Data cleanup error (non-fatal): %s", e)
+
+
 def run_pipeline():
-    """Run full pipeline: collector → news → feature_store → ml_module → backtester."""
+    """Run full pipeline: cleanup → collector → news → feature_store → ml_module → backtester."""
     global _last_pipeline_error
     with _state_lock:
         _last_pipeline_error = None
+    cleanup_stale_data()
     try:
         run_collect()
     except Exception as e:
@@ -186,7 +233,7 @@ def pipeline_loop():
 
     Applies exponential backoff (up to 1h) on consecutive failures.
     """
-    interval = int(os.environ.get("COLLECT_INTERVAL_SEC", "900"))
+    interval = int(os.environ.get("COLLECT_INTERVAL_SEC", "3600"))
     defer = int(os.environ.get("COLLECT_DEFER_SEC", "5"))
     max_backoff = 3600
     consecutive_failures = 0
