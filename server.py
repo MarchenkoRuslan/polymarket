@@ -153,44 +153,28 @@ def run_backtest():
 
 
 def cleanup_stale_data():
-    """Remove old duplicate/stale data to keep the DB lean.
+    """Remove duplicate trades (keep only one per market_id+ts+price).
 
-    - Deduplicate trades (keep only one per market_id+ts+price)
-    - Remove old trades beyond retention limit per market
-    - Remove orphan features for markets with no trades
+    Uses a PostgreSQL/SQLite-compatible approach with EXISTS subquery
+    instead of NOT IN with LIMIT (which PostgreSQL rejects).
     """
     try:
         from db import SessionLocal
         from sqlalchemy import text
         session = SessionLocal()
         try:
-            deleted_dupes = session.execute(text("""
-                DELETE FROM trades WHERE id NOT IN (
-                    SELECT MIN(id) FROM trades
-                    GROUP BY market_id, ts, price
-                )
-            """)).rowcount
+            deleted_dupes = session.execute(text(
+                "DELETE FROM trades WHERE id IN ("
+                "  SELECT t1.id FROM trades t1"
+                "  INNER JOIN trades t2"
+                "  ON t1.market_id = t2.market_id"
+                "  AND t1.ts = t2.ts"
+                "  AND t1.price = t2.price"
+                "  AND t1.id > t2.id"
+                ")"
+            )).rowcount
             if deleted_dupes:
                 logger.info("Cleanup: removed %d duplicate trades", deleted_dupes)
-
-            max_trades_per_market = int(os.environ.get("MAX_TRADES_PER_MARKET", "5000"))
-            over_limit = session.execute(text(
-                "SELECT market_id, COUNT(*) as cnt FROM trades "
-                "GROUP BY market_id HAVING COUNT(*) > :lim"
-            ), {"lim": max_trades_per_market}).fetchall()
-            trimmed = 0
-            for row in over_limit:
-                mid = row[0]
-                session.execute(text(
-                    "DELETE FROM trades WHERE market_id = :m AND id NOT IN ("
-                    "  SELECT id FROM trades WHERE market_id = :m "
-                    "  ORDER BY ts DESC LIMIT :lim"
-                    ")"
-                ), {"m": mid, "lim": max_trades_per_market})
-                trimmed += 1
-            if trimmed:
-                logger.info("Cleanup: trimmed trades for %d markets (max %d each)", trimmed, max_trades_per_market)
-
             session.commit()
         finally:
             session.close()

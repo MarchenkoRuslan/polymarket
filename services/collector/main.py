@@ -27,6 +27,7 @@ from services.collector.db_writer import (
     insert_trade,
     insert_orderbook,
     upsert_fee_rate,
+    get_latest_trade_ts,
     markets_from_events,
 )
 
@@ -298,16 +299,19 @@ async def collect_from_api():
             asset_id = token_ids[0] if token_ids else mid
             condition_id = m.get("conditionId") or m.get("condition_id") or mid
 
+            latest_ts = get_latest_trade_ts(session, mid)
+
             real_trades = _fetch_clob_trades(clob_client, condition_id, limit=200)
             for rt in real_trades:
-                if insert_trade(session, mid, rt["ts"], rt["price"], rt["size"], rt["side"]):
+                if insert_trade(session, mid, rt["ts"], rt["price"], rt["size"], rt["side"],
+                                latest_ts=latest_ts):
                     clob_trades_loaded += 1
                     loaded += 1
 
             if not real_trades:
                 history = []
                 try:
-                    history = await client.get_prices_history(asset_id, interval="1d")
+                    history = await client.get_prices_history(asset_id, interval="max")
                 except Exception as e:
                     logger.debug("Price history for %s unavailable: %s", mid, e)
                 for pt in history:
@@ -320,7 +324,8 @@ async def collect_from_api():
                     price = float(pt.get("p", pt.get("price", 0)))
                     if price <= 0 or price >= 1:
                         continue
-                    if insert_trade(session, mid, ts, price, 1.0, "buy"):
+                    if insert_trade(session, mid, ts, price, 1.0, "buy",
+                                    latest_ts=latest_ts):
                         loaded += 1
                 if not history:
                     price_val = None
@@ -333,7 +338,8 @@ async def collect_from_api():
                     if price_val is None or not (0 < price_val < 1):
                         price_val = _parse_outcome_prices(m.get("outcomePrices"))
                     if price_val is not None and 0 < price_val < 1:
-                        if insert_trade(session, mid, now, price_val, 1.0, "buy"):
+                        if insert_trade(session, mid, now, price_val, 1.0, "buy",
+                                        latest_ts=latest_ts):
                             loaded += 1
 
             ob_ok = await _collect_orderbook(client, session, m, mid, asset_id, now)

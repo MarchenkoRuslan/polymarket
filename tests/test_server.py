@@ -28,9 +28,10 @@ def test_run_collect_stores_error_and_reraises():
     assert server._last_collect_error == "simulated"
 
 
-def test_run_pipeline_calls_collect_news_features_ml_backtest():
-    """run_pipeline invokes run_collect, run_news, run_features, run_ml, run_backtest sequentially."""
+def test_run_pipeline_calls_cleanup_collect_news_features_ml_backtest():
+    """run_pipeline invokes cleanup, collect, news, features, ml, backtest sequentially."""
     with (
+        patch("server.cleanup_stale_data") as mock_clean,
         patch("server.run_collect") as mock_c,
         patch("server.run_news") as mock_n,
         patch("server.run_features") as mock_f,
@@ -38,6 +39,7 @@ def test_run_pipeline_calls_collect_news_features_ml_backtest():
         patch("server.run_backtest") as mock_bt,
     ):
         run_pipeline()
+        mock_clean.assert_called_once()
         mock_c.assert_called_once()
         mock_n.assert_called_once()
         mock_f.assert_called_once()
@@ -48,7 +50,10 @@ def test_run_pipeline_calls_collect_news_features_ml_backtest():
 def test_run_pipeline_catches_errors():
     """run_pipeline catches exceptions, stores error, does not propagate."""
     import server
-    with patch("server.run_collect", side_effect=RuntimeError("boom")):
+    with (
+        patch("server.cleanup_stale_data"),
+        patch("server.run_collect", side_effect=RuntimeError("boom")),
+    ):
         run_pipeline()
     assert server._last_pipeline_error == "boom"
 
@@ -56,6 +61,7 @@ def test_run_pipeline_catches_errors():
 def test_run_pipeline_skips_ml_when_features_fail():
     """run_pipeline skips ML and backtest when feature computation fails."""
     with (
+        patch("server.cleanup_stale_data"),
         patch("server.run_collect") as mock_c,
         patch("server.run_news") as mock_n,
         patch("server.run_features", side_effect=RuntimeError("features broke")) as mock_f,
