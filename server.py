@@ -135,18 +135,59 @@ def run_ml():
 def run_news():
     """Run News Collector (blocking). Errors are non-fatal for the pipeline."""
     try:
-        import asyncio
         from services.news_collector.main import main as news_main
-        asyncio.run(news_main())
+        logger.info("Starting News Collector")
+        news_main()
+        logger.info("News Collector completed")
     except Exception as e:
-        logger.warning("News Collector error (non-fatal): %s", e)
+        logger.warning("News Collector error (non-fatal): %s", e, exc_info=True)
+
+
+def run_backtest():
+    """Run Backtester (blocking). Errors are non-fatal for the pipeline."""
+    try:
+        from services.backtester.main import main as bt_main
+        bt_main()
+    except Exception as e:
+        logger.warning("Backtester error (non-fatal): %s", e)
+
+
+def cleanup_stale_data():
+    """Remove duplicate trades (keep only one per market_id+ts+price).
+
+    Uses a PostgreSQL/SQLite-compatible approach with EXISTS subquery
+    instead of NOT IN with LIMIT (which PostgreSQL rejects).
+    """
+    try:
+        from db import SessionLocal
+        from sqlalchemy import text
+        session = SessionLocal()
+        try:
+            deleted_dupes = session.execute(text(
+                "DELETE FROM trades WHERE id IN ("
+                "  SELECT t1.id FROM trades t1"
+                "  INNER JOIN trades t2"
+                "  ON t1.market_id = t2.market_id"
+                "  AND t1.ts = t2.ts"
+                "  AND t1.price = t2.price"
+                "  AND t1.id > t2.id"
+                ")"
+            )).rowcount
+            if deleted_dupes:
+                logger.info("Cleanup: removed %d duplicate trades", deleted_dupes)
+            session.commit()
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning("Data cleanup error (non-fatal): %s", e)
 
 
 def run_pipeline():
-    """Run full pipeline: collector → news → feature_store → ml_module."""
+    """Run full pipeline: cleanup → collector → news → feature_store → ml_module → backtester."""
     global _last_pipeline_error
     with _state_lock:
         _last_pipeline_error = None
+    cleanup_stale_data()
     try:
         run_collect()
     except Exception as e:
@@ -167,6 +208,7 @@ def run_pipeline():
     except Exception as e:
         with _state_lock:
             _last_pipeline_error = str(e)
+    run_backtest()
     logger.info("Pipeline cycle completed")
 
 
@@ -175,7 +217,7 @@ def pipeline_loop():
 
     Applies exponential backoff (up to 1h) on consecutive failures.
     """
-    interval = int(os.environ.get("COLLECT_INTERVAL_SEC", "900"))
+    interval = int(os.environ.get("COLLECT_INTERVAL_SEC", "3600"))
     defer = int(os.environ.get("COLLECT_DEFER_SEC", "5"))
     max_backoff = 3600
     consecutive_failures = 0

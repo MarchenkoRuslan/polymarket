@@ -12,13 +12,16 @@ Read **AGENTS.md** before making changes — service structure, DB, and code rul
 
 - **Web API**: `api/` (FastAPI, `/docs`, `/dashboard`), `server.py` (uvicorn + pipeline)
 - **Entry point**: `uvicorn api.app:app` or `python server.py`
-- **Pipeline**: collector → feature_store → ml_module (in background on startup)
-- **DB**: Alembic migrations in `db/migrations/`, `db/schema_sqlite.sql` for local SQLite
-- **Dependencies**: `requirements.txt` (full stack, ML for pipeline)
+- **Pipeline**: cleanup → collector → news → features → ML → backtest (background, hourly)
+- **DB**: Alembic migrations in `db/migrations/` (4 versions), `db/schema_sqlite.sql` for local SQLite
+- **Auth**: optional CLOB L2 via `POLYMARKET_PRIVATE_KEY` (enables real trade data)
+- **Dependencies**: `requirements.txt` (full stack incl. py-clob-client, ML)
 - **Linting**: `ruff check .`
+- **Tests**: `python -m pytest tests/ -v` (166 tests)
 
 ## Documentation
 
-- README.md — quick start, services
-- docs/ARCHITECTURE.md — diagram, tables, API
-- docs/RAILWAY.md — deployment, pipeline, troubleshooting
+- README.md — quick start, services, configuration
+- AGENTS.md — agent instructions, code rules, config reference
+- docs/ARCHITECTURE.md — diagram, tables, API, ML signals, pipeline
+- docs/RAILWAY.md — deployment, env vars, troubleshooting

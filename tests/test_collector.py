@@ -4,10 +4,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.collector.db_writer import markets_from_events
+from services.collector.db_writer import markets_from_events, insert_trade, get_latest_trade_ts
 from services.collector.main import (
     _collect_orderbook,
     _extract_market_id,
+    _is_liquid,
     _parse_clob_token_ids,
     _parse_outcome_prices,
 )
@@ -311,15 +312,15 @@ async def test_collect_orderbook_invalid_gamma_prices():
 
 
 @pytest.mark.asyncio
-async def test_collect_from_api_processes_all_markets_by_default():
-    """collect_from_api processes all markets when COLLECT_MARKETS_LIMIT=0."""
+async def test_collect_from_api_processes_all_liquid_markets():
+    """collect_from_api processes all liquid markets when COLLECT_MARKETS_LIMIT=0."""
     from services.collector.main import collect_from_api
 
     events = [
         {
             "id": "e1",
             "markets": [
-                {"id": f"m{i}", "question": f"Q{i}", "clobTokenIds": [f"tok{i}"]}
+                {"id": f"m{i}", "question": f"Q{i}", "clobTokenIds": [f"tok{i}"], "volume": "5000"}
                 for i in range(5)
             ],
         }
@@ -339,6 +340,7 @@ async def test_collect_from_api_processes_all_markets_by_default():
         patch("services.collector.main.PolymarketClient", return_value=mock_client),
         patch("services.collector.main.SessionLocal", return_value=mock_session),
         patch("services.collector.main.COLLECT_MARKETS_LIMIT", 0),
+        patch("services.collector.main._init_clob_client", return_value=None),
     ):
         await collect_from_api()
 
@@ -354,7 +356,7 @@ async def test_collect_from_api_respects_markets_limit():
         {
             "id": "e1",
             "markets": [
-                {"id": f"m{i}", "question": f"Q{i}", "clobTokenIds": [f"tok{i}"]}
+                {"id": f"m{i}", "question": f"Q{i}", "clobTokenIds": [f"tok{i}"], "volume": "5000"}
                 for i in range(10)
             ],
         }
@@ -374,6 +376,7 @@ async def test_collect_from_api_respects_markets_limit():
         patch("services.collector.main.PolymarketClient", return_value=mock_client),
         patch("services.collector.main.SessionLocal", return_value=mock_session),
         patch("services.collector.main.COLLECT_MARKETS_LIMIT", 3),
+        patch("services.collector.main._init_clob_client", return_value=None),
     ):
         await collect_from_api()
 
@@ -389,8 +392,8 @@ async def test_collect_from_api_inserts_fee_rates():
         {
             "id": "e1",
             "markets": [
-                {"id": "m1", "question": "Q1", "clobTokenIds": ["tok1"]},
-                {"id": "m2", "question": "Q2", "clobTokenIds": ["tok2"]},
+                {"id": "m1", "question": "Q1", "clobTokenIds": ["tok1"], "volume": "5000"},
+                {"id": "m2", "question": "Q2", "clobTokenIds": ["tok2"], "volume": "5000"},
             ],
         }
     ]
@@ -410,9 +413,89 @@ async def test_collect_from_api_inserts_fee_rates():
         patch("services.collector.main.SessionLocal", return_value=mock_session),
         patch("services.collector.main.COLLECT_MARKETS_LIMIT", 0),
         patch("services.collector.main.upsert_fee_rate") as mock_fee,
+        patch("services.collector.main._init_clob_client", return_value=None),
     ):
         await collect_from_api()
 
     assert mock_fee.call_count == 2
     mock_fee.assert_any_call(mock_session, "tok1", 30)
     mock_fee.assert_any_call(mock_session, "tok2", 30)
+
+
+class TestIsLiquid:
+    """Tests for _is_liquid market filter."""
+
+    def test_high_volume_is_liquid(self):
+        assert _is_liquid({"volume": "5000"}, min_volume=1000) is True
+
+    def test_low_volume_not_liquid(self):
+        assert _is_liquid({"volume": "100"}, min_volume=1000) is False
+
+    def test_no_volume_not_liquid(self):
+        assert _is_liquid({}, min_volume=1000) is False
+
+    def test_bid_ask_makes_liquid(self):
+        assert _is_liquid({"bestBid": "0.4", "bestAsk": "0.6"}, min_volume=1000) is True
+
+    def test_zero_bid_ask_not_liquid(self):
+        assert _is_liquid({"bestBid": "0", "bestAsk": "1"}, min_volume=1000) is False
+
+    def test_volume_as_float(self):
+        assert _is_liquid({"volume": 2000.0}, min_volume=1000) is True
+
+    def test_volumeNum_field(self):
+        assert _is_liquid({"volumeNum": "3000"}, min_volume=1000) is True
+
+    def test_invalid_volume_string(self):
+        assert _is_liquid({"volume": "not_a_number"}, min_volume=1000) is False
+
+
+class TestInsertTradeDedup:
+    """Tests for insert_trade latest_ts dedup."""
+
+    def test_skips_old_trade(self):
+        session = MagicMock()
+        ts = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        latest = datetime(2025, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
+        result = insert_trade(session, "m1", ts, 0.5, 1.0, "buy", latest_ts=latest)
+        assert result is False
+        session.execute.assert_not_called()
+
+    def test_inserts_new_trade(self):
+        session = MagicMock()
+        ts = datetime(2025, 1, 3, 0, 0, 0, tzinfo=timezone.utc)
+        latest = datetime(2025, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
+        result = insert_trade(session, "m1", ts, 0.5, 1.0, "buy", latest_ts=latest)
+        assert result is True
+        session.execute.assert_called_once()
+
+    def test_no_latest_ts_always_inserts(self):
+        session = MagicMock()
+        ts = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        result = insert_trade(session, "m1", ts, 0.5, 1.0, "buy", latest_ts=None)
+        assert result is True
+        session.execute.assert_called_once()
+
+
+class TestGetLatestTradeTs:
+    """Tests for get_latest_trade_ts."""
+
+    def test_returns_datetime(self):
+        session = MagicMock()
+        ts = datetime(2025, 6, 1, 12, 0, 0)
+        session.execute.return_value.fetchone.return_value = (ts,)
+        result = get_latest_trade_ts(session, "m1")
+        assert result == ts
+
+    def test_returns_none_when_empty(self):
+        session = MagicMock()
+        session.execute.return_value.fetchone.return_value = (None,)
+        result = get_latest_trade_ts(session, "m1")
+        assert result is None
+
+    def test_parses_string_ts(self):
+        session = MagicMock()
+        session.execute.return_value.fetchone.return_value = ("2025-06-01T12:00:00",)
+        result = get_latest_trade_ts(session, "m1")
+        assert result is not None
+        assert result.year == 2025

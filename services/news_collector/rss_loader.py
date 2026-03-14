@@ -14,7 +14,7 @@ except ImportError:
     HAS_FEEDPARSER = False
 
 
-def fetch_rss(url: str) -> list[dict]:
+def fetch_rss(url: str, timeout: float = 15) -> list[dict]:
     """Fetch and parse RSS feed. Returns list of {title, link, published, summary}."""
     if not HAS_FEEDPARSER:
         logger.warning("feedparser not installed, skipping RSS")
@@ -24,8 +24,8 @@ def fetch_rss(url: str) -> list[dict]:
             "User-Agent": "Mozilla/5.0 (compatible; PolymarketBot/1.0)",
             "Accept": "application/rss+xml, application/xml, text/xml, */*",
         }
-        with httpx.Client(follow_redirects=True) as client:
-            resp = client.get(url, timeout=20, headers=headers)
+        with httpx.Client(follow_redirects=True, timeout=timeout) as client:
+            resp = client.get(url, headers=headers)
             resp.raise_for_status()
         feed = feedparser.parse(resp.content)
         if not feed.entries:
@@ -51,7 +51,10 @@ def fetch_rss(url: str) -> list[dict]:
         logger.info("RSS %s: fetched %d entries", url, len(items))
         return items
     except Exception as e:
-        logger.warning("RSS fetch %s: %s", url, e)
+        if "timeout" in type(e).__name__.lower() or "timeout" in str(e).lower():
+            logger.warning("RSS fetch %s: timed out after %.0fs", url, timeout)
+        else:
+            logger.warning("RSS fetch %s: %s", url, e)
         return []
 
 

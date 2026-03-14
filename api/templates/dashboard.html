@@ -363,24 +363,53 @@ const D = {
     return m ? (m.question || m.event || mid) : mid;
   },
 
-  onMarketChange() {
+  async onMarketChange() {
+    const mid = this.getSelectedMarketId();
+    if (mid) {
+      document.getElementById('lastUpdated').innerHTML = '<span class="loading-spinner"></span> Loading market data...';
+      const [trades, signals, features, orderbook] = await Promise.all([
+        this.fetch('/trades?market_id=' + encodeURIComponent(mid) + '&limit=500'),
+        this.fetch('/signals?market_id=' + encodeURIComponent(mid) + '&limit=500'),
+        this.fetch('/features?market_id=' + encodeURIComponent(mid) + '&limit=1000'),
+        this.fetch('/orderbook?market_id=' + encodeURIComponent(mid) + '&limit=300'),
+      ]);
+      this.data.marketTrades = trades;
+      this.data.marketSignals = signals;
+      this.data.marketFeatures = features;
+      this.data.marketOrderbook = orderbook;
+      document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    } else {
+      this.data.marketTrades = null;
+      this.data.marketSignals = null;
+      this.data.marketFeatures = null;
+      this.data.marketOrderbook = null;
+    }
     this.renderAll();
   },
 
   getFilteredTrades() {
     const mid = this.getSelectedMarketId();
+    if (mid && this.data.marketTrades) {
+      return (this.data.marketTrades.items || []).slice().reverse();
+    }
     const items = (this.data.trades?.items || []).slice().reverse();
     return mid ? items.filter(t => t.market_id === mid) : items;
   },
 
   getFilteredSignals() {
     const mid = this.getSelectedMarketId();
+    if (mid && this.data.marketSignals) {
+      return (this.data.marketSignals.items || []).slice().reverse();
+    }
     const items = (this.data.signals?.items || []).slice().reverse();
     return mid ? items.filter(s => s.market_id === mid) : items;
   },
 
   getFilteredFeatures() {
     const mid = this.getSelectedMarketId();
+    if (mid && this.data.marketFeatures) {
+      return (this.data.marketFeatures.items || []).slice().reverse();
+    }
     const items = (this.data.features?.items || []).slice().reverse();
     return mid ? items.filter(f => f.market_id === mid) : items;
   },
@@ -621,7 +650,7 @@ const D = {
 
   selectMarket(mid) {
     document.getElementById('marketFilter').value = mid;
-    this.renderAll();
+    this.onMarketChange();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   },
 

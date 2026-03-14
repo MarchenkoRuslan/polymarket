@@ -11,119 +11,109 @@ Automated system for trading on Polymarket prediction markets: data collection �
 
 ### Web API + data collection (recommended)
 
-```powershell
+```bash
 python -m venv venv
-.\venv\Scripts\activate
+source venv/bin/activate    # Linux/macOS
+# .\venv\Scripts\activate   # Windows
 pip install -r requirements.txt
-copy .env.example .env
-.\run.ps1 init
-.\run.ps1 seed      # or warmup for real data
-.\run.ps1 server    # FastAPI + Swagger at http://localhost:8000
+cp .env.example .env
+python scripts/init_local.py
+python scripts/seed_demo.py     # or warmup for real data
+python server.py                # FastAPI + Swagger at http://localhost:8000
 ```
 
 - **Swagger UI**: http://localhost:8000/docs
 - **Dashboard**: http://localhost:8000/dashboard (Status, Markets, Trades, Signals, Performance, News)
 - **API**: `/api/v1/markets`, `/api/v1/trades`, `/api/v1/orderbook`, `/api/v1/signals`, `/api/v1/status`, `/api/v1/features`, `/api/v1/news`, `/api/v1/results`, `/api/v1/analytics`
-- **Full pipeline** in background: collector → features → ML (on startup and every 15 min)
+- **Full pipeline** in background: cleanup → collector → news → features → ML → backtest (on startup, then every hour)
 
 ### Full pipeline (without web)
 
-```powershell
-.\run.ps1 init
-.\run.ps1 seed      # or warmup
-.\run.ps1 collect
-.\run.ps1 features
-.\run.ps1 ml
-.\run.ps1 backtest
-.\run.ps1 bot
+```bash
+python -m services.collector.main
+python -m services.news_collector.main
+python -m services.feature_store.main
+python -m services.ml_module.main
+python -m services.backtester.main
+python -m services.execution_bot.main
 ```
 
-Demo data: `.\run.ps1 seed`. Real data: `.\run.ps1 warmup` (~5 min).
-
-### Local run (Docker Compose)
+### Local development (Docker Compose)
 
 ```bash
 cp .env.example .env
 # In .env set DATABASE_URL=postgresql://polymarket:polymarket@localhost:5432/polymarket
 docker compose up -d db
-# Wait for DB readiness, then:
 docker compose up -d
-```
-
-### Local development (PostgreSQL)
-
-```bash
-pip install -r requirements.txt
-cp .env.example .env
-# DATABASE_URL=postgresql://...
-alembic upgrade head
-python -m services.collector.main
-# etc.
 ```
 
 ## Services
 
 | Service | Description |
 |---------|-------------|
-| **Web API** | FastAPI, Swagger UI, Dashboard at `/dashboard`. Endpoints: markets, trades, orderbook, signals, features, news, results, analytics, status. Full pipeline (collect→features→ml) in background |
-| `collector` | Polymarket API data collection (Gamma, CLOB) and PMXT Parquet |
-| `news_collector` | RSS news collection with keyword filtering |
-| `feature_store` | Features: MA, volatility, RSI, MACD, spread, volume |
-| `ml_module` | Model training (LR, RF, XGBoost), signal generation |
-| `backtester` | Simulation with fees, slippage, signals 1/0/-1 |
+| **Web API** | FastAPI, Swagger UI, Dashboard at `/dashboard`. Full pipeline in background (hourly) |
+| `collector` | Polymarket API data collection (Gamma markets, CLOB trades with optional L2 auth, orderbook). Filters to liquid markets |
+| `news_collector` | RSS news collection (Google News, CoinDesk, CoinTelegraph, NY Times) with keyword filtering |
+| `feature_store` | Features: MA, volatility, RSI, MACD, spread, volume. Prioritizes liquid markets |
+| `ml_module` | Model training (Logistic Regression, Random Forest, XGBoost), walk-forward validation, signal generation. Multi-period target horizon |
+| `backtester` | Simulation with fees (30 bps), slippage (10 bps), signals 1/0/-1 |
 | `execution_bot` | Order placement via py-clob-client (dry-run by default) |
-| `prometheus` | Metrics (port 9090) |
-| `grafana` | Dashboards (port 3000) |
 
-## Data Loading
+## Data Collection
 
 ### Real data (Polymarket API)
 
 Collector loads:
-- **Markets** — from Gamma API (active events)
-- **Prices** — from CLOB `prices-history` (if available) or current `lastTradePrice` from Gamma
+- **Markets** — from Gamma API (active events, filtered by liquidity)
+- **Trades** — from CLOB API with L2 auth (real buy/sell with sizes) or public `prices-history` (fallback)
+- **Orderbook** — from CLOB `/book` or Gamma `bestBid`/`bestAsk`
 
-```powershell
-.\run.ps1 collect
+```bash
+python -m services.collector.main
 ```
 
-Run `collect` regularly (e.g. hourly via cron/Task Scheduler) to accumulate history for ML.
+### CLOB Authentication (optional, recommended)
+
+For real trade data with proper buy/sell sides and sizes, set up CLOB L2 authentication:
+
+```bash
+# Option 1: Private key only (API creds auto-derived on startup)
+POLYMARKET_PRIVATE_KEY=0x...your_private_key...
+
+# Option 2: Pre-derived API credentials
+POLYMARKET_PRIVATE_KEY=0x...
+POLYMARKET_API_KEY=...
+POLYMARKET_API_SECRET=...
+POLYMARKET_API_PASSPHRASE=...
+```
+
+Without auth, the collector uses public `prices-history` API which returns price snapshots without buy/sell distinction.
 
 ### Demo data (no API)
 
-```powershell
-.\run.ps1 seed   # 2 markets, 350 trades
+```bash
+python scripts/seed_demo.py    # 2 markets, 350 trades
 ```
-
-### PMXT (historical Parquet)
-
-```powershell
-.\run.ps1 pmxt --start 2026-03-10 --hours 6
-```
-
-- **Hourly format** (default): `polymarket_{trades|orderbook}_{date}T{hour}.parquet`
-- **Legacy (daily)**: `.\run.ps1 pmxt --legacy --days 7`
-- Options: `--start`, `--hours`, `--url`, `--legacy`, `--days`
 
 ## Configuration
 
 Environment variables (see `.env.example`):
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `POLYMARKET_CLOB_API` | CLOB API URL |
-| `POLYMARKET_GAMMA_API` | Gamma API URL |
-| `PMXT_ARCHIVE_URL` | PMXT archive URL |
-| `DEFAULT_FEE_BPS` | Fee in basis points (30 = 0.3%) |
-| `API_RATE_LIMIT` | Requests per minute (for PolymarketClient) |
-| `POLYMARKET_DRY_RUN` | `true` (default) — order simulation |
-| `POLYMARKET_PRIVATE_KEY` | Private key for real trading |
-| `POLYMARKET_PASSPHRASE` | API credentials passphrase |
-| `NEWS_KEYWORDS` | Keywords for news filtering (comma-separated) |
-| `RSS_FEEDS` | RSS feed URLs (comma-separated) |
-| `COLLECT_INTERVAL_SEC` | Background pipeline interval (default 900 = 15 min) |
-| `COLLECT_DEFER_SEC` | Delay before first pipeline run (default 5 sec) |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql://...` | PostgreSQL or SQLite connection string |
+| `DATABASE_SSLMODE` | `prefer` | SSL mode for PostgreSQL (`require` for Railway) |
+| `POLYMARKET_PRIVATE_KEY` | (empty) | Private key for CLOB L2 auth (enables real trade data) |
+| `POLYMARKET_API_KEY/SECRET/PASSPHRASE` | (empty) | Pre-derived CLOB API credentials |
+| `COLLECT_INTERVAL_SEC` | `3600` | Pipeline cycle interval (1 hour) |
+| `COLLECT_MARKETS_LIMIT` | `0` | Max markets per cycle (0 = all liquid) |
+| `MIN_MARKET_VOLUME` | `1000` | Minimum volume to consider a market liquid |
+| `ML_TARGET_HORIZON` | `5` | Predict price up within next N periods |
+| `MIN_PRICE_STD` | `0.002` | Skip flat-price markets for ML |
+| `DEFAULT_FEE_BPS` | `30` | Fee in basis points (0.3%) |
+| `API_RATE_LIMIT` | `100` | Polymarket API requests per minute |
+| `POLYMARKET_DRY_RUN` | `true` | Order simulation mode |
+| `NEWS_KEYWORDS` | `election,crypto,...` | Keywords for news filtering |
 
 ## Testing
 
@@ -133,7 +123,8 @@ python -m pytest tests/ -v
 ruff check .
 ```
 
-- Unit tests: backtester, features, risk, collector, orders, news, **API** (FastAPI)
+- 166 tests total (unit + integration)
+- Unit tests: backtester, features, risk, collector, orders, news, API (FastAPI), settings
 - Integration: pipeline collector → features → ml → backtest (SQLite)
 - Stress tests: double fee, high slippage, volatility
 
@@ -144,32 +135,26 @@ ruff check .
 See [docs/RAILWAY.md](docs/RAILWAY.md):
 
 - FastAPI + Swagger, PostgreSQL
-- Full pipeline (collector → features → ML) in background
-- Cron for collection, Backtest — as needed
+- Full pipeline in background (hourly): cleanup → collector → news → features → ML → backtest
+- Optional: CLOB auth for real trade data
 
 ### Docker Compose
 
 1. Configure `.env` for target environment
 2. `docker compose up -d`
-3. Migrations: `docker compose run --rm collector alembic upgrade head`
-4. If needed — PMXT load via `scripts/load_pmxt.py`
-5. For real trading: `POLYMARKET_DRY_RUN=false`, set `POLYMARKET_PRIVATE_KEY`
+3. Migrations run automatically on startup
+4. For real trading: `POLYMARKET_DRY_RUN=false`, set `POLYMARKET_PRIVATE_KEY`
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| Empty `markets`, `trades` | Run `.\run.ps1 seed` or `.\run.ps1 pmxt --hours 6`, then `.\run.ps1 warmup` for real data |
-| Empty `features`, `signals` | Pipeline runs after collector. Check `/api/v1/status`: `last_features_error`, `last_ml_error` |
-| ML: "only one class in data" | Insufficient price diversity. Add data (PMXT, warmup) |
-| `market_id` required | API does not require market_id in request — all query params optional |
-
-## Risks
-
-- Legal restrictions on prediction markets (US/CA)
-- KYC for Kalshi
-- Check platform rules before real trading
-- `market_id` (condition_id) ≠ `token_id` — real orders require token_id from Gamma API
+| Empty `markets`, `trades` | Check `/api/v1/status` for errors. Wait for pipeline cycle (1 hour) or run `python -m services.collector.main` |
+| Empty `features`, `signals` | Pipeline runs after collector. Check `last_features_error`, `last_ml_error` in `/api/v1/status` |
+| All signals = "sell" | Set `POLYMARKET_PRIVATE_KEY` for real trades, or wait for more price history with variation |
+| ML: "single class" | Insufficient price diversity. `MIN_PRICE_STD=0.002` filters flat markets. Add more data |
+| Empty `news` | News collector runs each pipeline cycle. Check network access to RSS feeds |
+| Empty `results` | Backtester runs at end of pipeline. Check that signals exist first |
 
 ## License
 

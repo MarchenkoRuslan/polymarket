@@ -71,6 +71,24 @@ def insert_orderbook(
     )
 
 
+def get_latest_trade_ts(session: Session, market_id: str) -> datetime | None:
+    """Return the latest trade timestamp for a market, or None."""
+    row = session.execute(
+        text("SELECT MAX(ts) FROM trades WHERE market_id = :m"),
+        {"m": market_id},
+    ).fetchone()
+    if row and row[0] is not None:
+        val = row[0]
+        if isinstance(val, datetime):
+            return val
+        if isinstance(val, str):
+            try:
+                return datetime.fromisoformat(val)
+            except (ValueError, TypeError):
+                return None
+    return None
+
+
 def insert_trade(
     session: Session,
     market_id: str,
@@ -78,8 +96,17 @@ def insert_trade(
     price: float,
     size: float,
     side: str,
-) -> None:
-    """Insert trade."""
+    *,
+    latest_ts: datetime | None = None,
+) -> bool:
+    """Insert trade, skipping if ts <= latest_ts (fast bulk dedup).
+
+    When *latest_ts* is provided, trades at or before that timestamp are
+    assumed to already exist and are skipped without a DB round-trip.
+    Falls back to a point query only for trades newer than latest_ts.
+    """
+    if latest_ts is not None and ts <= latest_ts:
+        return False
     session.execute(
         text("""
             INSERT INTO trades (ts, market_id, price, size, side)
@@ -87,6 +114,7 @@ def insert_trade(
         """),
         {"ts": ts, "market_id": market_id, "price": price, "size": size, "side": side},
     )
+    return True
 
 
 def upsert_fee_rate(session: Session, token_id: str, fee_bps: int) -> None:

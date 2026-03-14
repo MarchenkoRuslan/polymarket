@@ -43,15 +43,30 @@ def _batch_insert_features(session, rows: list[dict]) -> None:
         session.execute(stmt, batch)
 
 
-def run(session):
-    """Compute features for all markets with trades."""
-    result = session.execute(
-        text("SELECT DISTINCT market_id FROM trades WHERE market_id NOT LIKE '0x_demo%'"),
-    )
+def _get_feature_markets(session) -> list[str]:
+    """Get markets prioritized by liquidity (those with orderbook data first)."""
+    result = session.execute(text(
+        "SELECT t.market_id, COUNT(*) as cnt "
+        "FROM trades t "
+        "LEFT JOIN (SELECT DISTINCT market_id FROM orderbook) ob "
+        "ON t.market_id = ob.market_id "
+        "WHERE t.market_id NOT LIKE '0x_demo%' "
+        "GROUP BY t.market_id "
+        "ORDER BY (ob.market_id IS NOT NULL) DESC, cnt DESC"
+    ))
     markets = [r[0] for r in result.fetchall()]
     if not markets:
-        result = session.execute(text("SELECT DISTINCT market_id FROM trades"))
+        result = session.execute(text(
+            "SELECT DISTINCT market_id FROM trades ORDER BY market_id"
+        ))
         markets = [r[0] for r in result.fetchall()]
+    return markets
+
+
+def run(session):
+    """Compute features for markets with trades, prioritizing liquid markets."""
+    markets = _get_feature_markets(session)
+    computed = 0
     for mid in markets[:FEATURE_MARKETS_LIMIT]:
         df = load_trades_by_market(session, mid)
         if df.empty or len(df) < 5:
@@ -64,7 +79,9 @@ def run(session):
         )
         _batch_insert_features(session, rows)
         session.commit()
+        computed += 1
         logger.info("Features for %s: %d rows", mid[:16], len(rows))
+    logger.info("Computed features for %d markets", computed)
 
 
 def main():
