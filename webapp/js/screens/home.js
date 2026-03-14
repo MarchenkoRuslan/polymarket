@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { formatPrice, formatPnl, formatNumber, signalBadge, truncate, showLoading, showError } from '../utils.js';
+import { formatPrice, formatPnl, formatNumber, signalBadge, truncate, sparklineSVG, showLoading, showError } from '../utils.js';
 import { createDoughnutChart } from '../charts.js';
 import { navigate } from '../router.js';
 
@@ -128,9 +128,26 @@ export async function render(container) {
                 createDoughnutChart(canvas, ['Buy', 'Hold', 'Sell'], [buyCount, holdCount, sellCount]);
             }
         }
+
+        _loadSparklines(marketsEl, top.length > 0 ? top.map(t => t.market_id) : (markets.items || []).slice(0, 3).map(m => m.market_id));
     } catch (err) {
         showError(container, err.message);
     }
+}
+
+async function _loadSparklines(container, marketIds) {
+    if (!marketIds.length) return;
+    const results = await Promise.allSettled(
+        marketIds.map(id => api.getTrades(id, 50))
+    );
+    results.forEach((r, i) => {
+        if (r.status !== 'fulfilled') return;
+        const trades = (r.value.items || []).slice().reverse();
+        if (trades.length < 3) return;
+        const prices = trades.map(t => t.price);
+        const slot = container.querySelector(`[data-sparkline="${CSS.escape(marketIds[i])}"]`);
+        if (slot) slot.innerHTML = sparklineSVG(prices, 64, 28);
+    });
 }
 
 function _marketCard(id, question, price, volume, signalLabel) {
@@ -145,6 +162,7 @@ function _marketCard(id, question, price, volume, signalLabel) {
             </div>
         </div>
         <div class="market-card-right">
+            <div data-sparkline="${_attr(id)}" class="sparkline-slot"></div>
             ${price != null ? `<div class="market-card-price">${formatPrice(price)}</div>` : ''}
             <div class="card-chevron">›</div>
         </div>
@@ -158,4 +176,9 @@ function _esc(s) {
     const d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;
+}
+
+function _attr(s) {
+    if (!s) return '';
+    return s.replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }

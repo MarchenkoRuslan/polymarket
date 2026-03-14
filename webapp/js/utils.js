@@ -84,3 +84,22 @@ export function showError(container, msg) {
             <div class="empty-state-text">${msg}</div>
         </div>`;
 }
+
+export function sparklineSVG(prices, width = 64, height = 28) {
+    if (!prices || prices.length < 2) return '';
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const range = max - min || 1;
+    const pad = 2;
+    const w = width - pad * 2;
+    const h = height - pad * 2;
+    const points = prices.map((p, i) => {
+        const x = pad + (i / (prices.length - 1)) * w;
+        const y = pad + h - ((p - min) / range) * h;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    const last = prices[prices.length - 1];
+    const first = prices[0];
+    const color = last >= first ? 'var(--positive)' : 'var(--negative)';
+    return `<svg class="sparkline" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}

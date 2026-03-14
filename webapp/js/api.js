@@ -1,26 +1,49 @@
 const BASE = '/api/v1';
 
+const MAX_RETRIES = 3;
+const BASE_DELAY = 1000;
+
 async function request(path, params = {}) {
-    const url = new URL(path, window.location.origin);
+    const url = new URL(BASE + path, window.location.origin);
     Object.entries(params).forEach(([k, v]) => {
         if (v !== undefined && v !== null) url.searchParams.set(k, v);
     });
-    const res = await fetch(url.toString());
-    if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
-    return res.json();
+
+    let lastError;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            const res = await fetch(url.toString());
+            if (res.ok) return res.json();
+            if (res.status >= 400 && res.status < 500) {
+                throw new Error(`API ${res.status}: ${res.statusText}`);
+            }
+            lastError = new Error(`API ${res.status}: ${res.statusText}`);
+        } catch (err) {
+            lastError = err;
+            if (err.message.startsWith('API 4')) throw err;
+        }
+        if (attempt < MAX_RETRIES) {
+            await sleep(BASE_DELAY * Math.pow(2, attempt));
+        }
+    }
+    throw lastError;
+}
+
+function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
 }
 
 export const api = {
-    getStatus()                          { return request(`${BASE}/status`); },
-    getAnalytics()                       { return request(`${BASE}/analytics`); },
+    getStatus()                          { return request('/status'); },
+    getAnalytics()                       { return request('/analytics'); },
     getMarkets(limit = 100, offset = 0, withSignals = false) {
-        return request(`${BASE}/markets`, { limit, offset, with_signals: withSignals || undefined });
+        return request('/markets', { limit, offset, with_signals: withSignals || undefined });
     },
-    getMarket(id)                        { return request(`${BASE}/markets/${encodeURIComponent(id)}`); },
-    getTrades(marketId, limit = 100)     { return request(`${BASE}/trades`, { market_id: marketId, limit }); },
-    getOrderbook(marketId, limit = 100)  { return request(`${BASE}/orderbook`, { market_id: marketId, limit }); },
-    getSignals(marketId, limit = 100)    { return request(`${BASE}/signals`, { market_id: marketId, limit }); },
-    getFeatures(marketId, limit = 500)   { return request(`${BASE}/features`, { market_id: marketId, limit }); },
-    getNews(limit = 30)                  { return request(`${BASE}/news`, { limit }); },
-    getResults(marketId, limit = 200)    { return request(`${BASE}/results`, { market_id: marketId, limit }); },
+    getMarket(id)                        { return request(`/markets/${encodeURIComponent(id)}`); },
+    getTrades(marketId, limit = 100)     { return request('/trades', { market_id: marketId, limit }); },
+    getOrderbook(marketId, limit = 100)  { return request('/orderbook', { market_id: marketId, limit }); },
+    getSignals(marketId, limit = 100)    { return request('/signals', { market_id: marketId, limit }); },
+    getFeatures(marketId, limit = 500)   { return request('/features', { market_id: marketId, limit }); },
+    getNews(limit = 30)                  { return request('/news', { limit }); },
+    getResults(marketId, limit = 200)    { return request('/results', { market_id: marketId, limit }); },
 };

@@ -1,5 +1,5 @@
 import { applyTheme } from './theme.js';
-import { initRouter, registerRoute, startRouter, navigate, currentScreen } from './router.js';
+import { initRouter, registerRoute, startRouter, navigate } from './router.js';
 import { render as homeRender } from './screens/home.js';
 import { render as marketsRender } from './screens/markets.js';
 import { render as marketDetailRender } from './screens/marketDetail.js';
@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('content');
     const navBar = document.getElementById('nav-bar');
 
+    initOfflineBanner();
     renderNav(navBar);
 
     registerRoute('home', homeRender);
@@ -72,4 +73,16 @@ function updateNavActive(screen) {
     document.querySelectorAll('.nav-item').forEach(el => {
         el.classList.toggle('active', el.dataset.screen === mainScreen);
     });
+}
+
+function initOfflineBanner() {
+    const banner = document.createElement('div');
+    banner.className = 'offline-banner';
+    banner.textContent = 'No internet connection';
+    document.body.prepend(banner);
+
+    const update = () => banner.classList.toggle('visible', !navigator.onLine);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    update();
 }
