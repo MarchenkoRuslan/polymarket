@@ -354,6 +354,17 @@ button {
     font-variant-numeric: tabular-nums;
 }
 
+/* ===== Sparkline ===== */
+
+.sparkline-slot {
+    height: 28px;
+    min-width: 64px;
+}
+
+.sparkline {
+    display: block;
+}
+
 /* ===== Badges ===== */
 
 .badge {
@@ -811,6 +822,28 @@ button {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* ===== Offline Banner ===== */
+
+.offline-banner {
+    position: fixed;
+    top: var(--safe-top);
+    left: 0;
+    right: 0;
+    background: var(--warning);
+    color: #fff;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 8px;
+    z-index: 200;
+    transform: translateY(-100%);
+    transition: transform 0.3s ease;
+}
+
+.offline-banner.visible {
+    transform: translateY(0);
 }
 
 /* ===== Scrollbar (desktop fallback) ===== */
