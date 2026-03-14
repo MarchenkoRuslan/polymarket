@@ -1,5 +1,5 @@
 """Integration tests: full pipeline collector -> features -> ml -> backtest."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import pytest
@@ -26,7 +26,7 @@ def test_pipeline_collector_to_features(db_session):
         "event_id": "e1",
         "outcome_settled": False,
     })
-    base = datetime(2025, 1, 1, 12, 0, 0)
+    base = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     for i in range(100):
         ts = base + timedelta(minutes=i)
         price = 0.5 + 0.001 * (i % 20)
@@ -49,7 +49,7 @@ def test_pipeline_features_to_ml(db_session):
     from services.ml_module.models import FEATURE_COLS, prepare_xy, impute_features, train_baseline, walk_forward_validate
 
     upsert_market(db_session, {"id": "m2", "question": "Q2", "event_id": "e1", "outcome_settled": False})
-    base = datetime(2025, 1, 1, 12, 0, 0)
+    base = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     for i in range(80):
         ts = base + timedelta(minutes=i)
         price = 0.5 + 0.002 * (i % 10)
@@ -77,7 +77,7 @@ def test_pipeline_backtest_with_signals(db_session):
     from services.backtester.engine import run_backtest, BacktestConfig, baseline_always_buy
 
     upsert_market(db_session, {"id": "m3", "question": "Q3", "event_id": "e1", "outcome_settled": False})
-    base = datetime(2025, 1, 1, 12, 0, 0)
+    base = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     for i in range(50):
         ts = base + timedelta(minutes=i)
         insert_trade(db_session, "m3", ts, 0.5 + i * 0.001, 10.0, "buy")
@@ -124,7 +124,7 @@ def test_db_writer_insert_trade(db_session):
     """db_writer insert_trade works."""
     from services.collector.db_writer import insert_trade
 
-    ts = datetime(2025, 1, 1, 12, 0, 0)
+    ts = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     insert_trade(db_session, "m4", ts, 0.55, 100.0, "buy")
     db_session.commit()
     r = db_session.execute(text("SELECT market_id, price, size, side FROM trades WHERE market_id = 'm4'")).fetchone()
@@ -138,7 +138,7 @@ def test_db_writer_insert_orderbook(db_session):
     """db_writer insert_orderbook works."""
     from services.collector.db_writer import insert_orderbook
 
-    ts = datetime(2025, 1, 1, 12, 0, 0)
+    ts = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     insert_orderbook(db_session, "m5", ts, 0.45, 50.0, 0.55, 60.0)
     db_session.commit()
     r = db_session.execute(text("SELECT bid_price, ask_price FROM orderbook WHERE market_id = 'm5'")).fetchone()

@@ -1,6 +1,6 @@
 """Write collected data to PostgreSQL."""
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -71,8 +71,19 @@ def insert_orderbook(
     )
 
 
+def _ensure_utc(dt: datetime) -> datetime:
+    """Ensure a datetime is timezone-aware (UTC). Naive datetimes are assumed UTC."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def get_latest_trade_ts(session: Session, market_id: str) -> datetime | None:
-    """Return the latest trade timestamp for a market, or None."""
+    """Return the latest trade timestamp for a market, or None.
+
+    Always returns a timezone-aware (UTC) datetime to avoid
+    offset-naive vs offset-aware comparison errors.
+    """
     row = session.execute(
         text("SELECT MAX(ts) FROM trades WHERE market_id = :m"),
         {"m": market_id},
@@ -80,10 +91,11 @@ def get_latest_trade_ts(session: Session, market_id: str) -> datetime | None:
     if row and row[0] is not None:
         val = row[0]
         if isinstance(val, datetime):
-            return val
+            return _ensure_utc(val)
         if isinstance(val, str):
             try:
-                return datetime.fromisoformat(val)
+                dt = datetime.fromisoformat(val)
+                return _ensure_utc(dt)
             except (ValueError, TypeError):
                 return None
     return None
@@ -105,8 +117,11 @@ def insert_trade(
     assumed to already exist and are skipped without a DB round-trip.
     Falls back to a point query only for trades newer than latest_ts.
     """
-    if latest_ts is not None and ts <= latest_ts:
-        return False
+    if latest_ts is not None:
+        ts_cmp = _ensure_utc(ts) if ts.tzinfo is None else ts
+        latest_cmp = _ensure_utc(latest_ts) if latest_ts.tzinfo is None else latest_ts
+        if ts_cmp <= latest_cmp:
+            return False
     session.execute(
         text("""
             INSERT INTO trades (ts, market_id, price, size, side)
