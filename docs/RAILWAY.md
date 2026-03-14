@@ -62,15 +62,16 @@ uvicorn api.app:app --host 0.0.0.0 --port $PORT
 Main service — FastAPI (`api.app`):
 - `/` and `/health` — health check
 - `/docs` — Swagger UI
-- `/dashboard` — visual dashboard with 6 tabs (Overview, Trading, Technical, Signals, Performance, News)
 - `/api/v1/*` — REST API endpoints
+
+UI dashboard is deployed separately from [polymarket-ui](https://github.com/MarchenkoRuslan/polymarket-ui). Set `CORS_ORIGINS` to allow the UI domain.
 
 **Background pipeline** (automatic, every hour):
 ```
 cleanup (dedup trades) → collector → news → features → ML → backtest
 ```
 
-With `SKIP_ML_FIRST_RUN=true` (default), the first run is light: collector + news + features only. Dashboard shows markets, trades, orderbook, features within 2–5 min. ML and backtest run on the next cycle (~1 hour later).
+With `SKIP_ML_FIRST_RUN=true` (default), the first run is light: collector + news + features only. API returns markets, trades, orderbook, features within 2–5 min. ML and backtest run on the next cycle (~1 hour later).
 
 ### What populates each table
 
@@ -128,7 +129,7 @@ Market prices went only up (or only down) in the training period — target has 
 
 - `/api/v1/status` — table counts, error messages, DB status
 - `/health` — returns 503 if migrations failed
-- Dashboard at `/dashboard` — visual overview with auto-refresh
+- UI dashboard: deployed separately from [polymarket-ui](https://github.com/MarchenkoRuslan/polymarket-ui)
 
 ## 7. Cron Job (optional)
 

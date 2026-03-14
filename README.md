@@ -23,8 +23,8 @@ python server.py                # FastAPI + Swagger at http://localhost:8000
 ```
 
 - **Swagger UI**: http://localhost:8000/docs
-- **Dashboard**: http://localhost:8000/dashboard (Status, Markets, Trades, Signals, Performance, News)
 - **API**: `/api/v1/markets`, `/api/v1/trades`, `/api/v1/orderbook`, `/api/v1/signals`, `/api/v1/status`, `/api/v1/features`, `/api/v1/news`, `/api/v1/results`, `/api/v1/analytics`
+- **UI Dashboard**: separate repo — [polymarket-ui](https://github.com/MarchenkoRuslan/polymarket-ui) (Telegram Web App, connects to this API)
 - **Full pipeline** in background: cleanup → collector → news → features → ML → backtest (on startup, then every hour)
 
 ### Full pipeline (without web)
@@ -51,7 +51,7 @@ docker compose up -d
 
 | Service | Description |
 |---------|-------------|
-| **Web API** | FastAPI, Swagger UI, Dashboard at `/dashboard`. Full pipeline in background (hourly) |
+| **Web API** | FastAPI, Swagger UI (`/docs`), REST API (`/api/v1/*`). Full pipeline in background (hourly) |
 | `collector` | Polymarket API data collection (Gamma markets, CLOB trades with optional L2 auth, orderbook). Filters to liquid markets |
 | `news_collector` | RSS news collection (Google News, CoinDesk, CoinTelegraph, NY Times) with keyword filtering |
 | `feature_store` | Features: MA, volatility, RSI, MACD, spread, volume. Prioritizes liquid markets |
