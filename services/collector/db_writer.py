@@ -78,8 +78,16 @@ def insert_trade(
     price: float,
     size: float,
     side: str,
-) -> None:
-    """Insert trade."""
+) -> bool:
+    """Insert trade if it doesn't already exist (dedup by market_id + ts + price)."""
+    exists = session.execute(
+        text(
+            "SELECT 1 FROM trades WHERE market_id = :m AND ts = :ts AND price = :p LIMIT 1"
+        ),
+        {"m": market_id, "ts": ts, "p": price},
+    ).fetchone()
+    if exists:
+        return False
     session.execute(
         text("""
             INSERT INTO trades (ts, market_id, price, size, side)
@@ -87,6 +95,7 @@ def insert_trade(
         """),
         {"ts": ts, "market_id": market_id, "price": price, "size": size, "side": side},
     )
+    return True
 
 
 def upsert_fee_rate(session: Session, token_id: str, fee_bps: int) -> None:

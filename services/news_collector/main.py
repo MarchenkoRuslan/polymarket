@@ -1,5 +1,4 @@
 """News Collector - fetches RSS feeds and stores for feature extraction."""
-import asyncio
 import logging
 import os
 import sys
@@ -116,7 +115,7 @@ def _source_name(url: str) -> str:
         return url[:40]
 
 
-async def main():
+def main():
     """Fetch RSS, filter by keywords, store in DB."""
     logger.info("News Collector starting")
     feeds = os.getenv("RSS_FEEDS", "").split(",") if os.getenv("RSS_FEEDS") else DEFAULT_FEEDS
@@ -165,4 +164,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

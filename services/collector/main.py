@@ -17,6 +17,7 @@ from config import (
 )
 from db import SessionLocal
 from services.collector.polymarket_client import PolymarketClient
+from sqlalchemy import text as sa_text
 from services.collector.db_writer import (
     upsert_market,
     insert_trade,
@@ -150,6 +151,26 @@ async def _collect_orderbook(
         insert_orderbook(session, market_id, now, bid_p, bid_q, ask_p, ask_q)
         return True
     return False
+
+
+def _get_latest_trade_ts(session, market_id: str) -> datetime | None:
+    """Get the latest trade timestamp for a market."""
+    row = session.execute(
+        sa_text("SELECT MAX(ts) FROM trades WHERE market_id = :m"),
+        {"m": market_id},
+    ).fetchone()
+    if row and row[0]:
+        ts_val = row[0]
+        if isinstance(ts_val, str):
+            try:
+                return datetime.fromisoformat(ts_val).replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                return None
+        if isinstance(ts_val, datetime):
+            if ts_val.tzinfo is None:
+                return ts_val.replace(tzinfo=timezone.utc)
+            return ts_val
+    return None
 
 
 async def collect_from_api():

@@ -135,10 +135,9 @@ def run_ml():
 def run_news():
     """Run News Collector (blocking). Errors are non-fatal for the pipeline."""
     try:
-        import asyncio
         from services.news_collector.main import main as news_main
         logger.info("Starting News Collector")
-        asyncio.run(news_main())
+        news_main()
         logger.info("News Collector completed")
     except Exception as e:
         logger.warning("News Collector error (non-fatal): %s", e, exc_info=True)
