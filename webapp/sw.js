@@ -79,6 +79,11 @@ async function staleWhileRevalidate(req) {
     const fetchPromise = fetch(req).then(res => {
         if (res.ok) caches.open(CACHE).then(c => c.put(req, res.clone()));
         return res;
-    }).catch(() => cached);
-    return cached || fetchPromise;
+    }).catch(() => null);
+    if (cached) {
+        fetchPromise.catch(() => {});
+        return cached;
+    }
+    const res = await fetchPromise;
+    return res || new Response('', { status: 408, statusText: 'Offline' });
 }

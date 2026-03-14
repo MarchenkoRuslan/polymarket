@@ -146,11 +146,7 @@ function _shortTs(ts) {
 
 function _truncId(id) {
     if (!id) return '';
-    return id.length > 12 ? id.slice(0, 10) + '…' : id;
-}
-
-function _esc(s) {
-    if (!s) return '';
+    const s = id.length > 12 ? id.slice(0, 10) + '…' : id;
     const d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;

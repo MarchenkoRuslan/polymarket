@@ -42,7 +42,7 @@ function baseOpts(colors) {
 
 export function createLineChart(canvas, labels, datasets, extraOpts = {}) {
     const c = getChartColors();
-    const dsets = datasets.map((ds, i) => ({
+    const dsets = datasets.map(ds => ({
         borderColor: ds.color || c.accent,
         backgroundColor: (ds.color || c.accent) + '18',
         borderWidth: 2,
@@ -84,7 +84,7 @@ export function createDoughnutChart(canvas, labels, data, colors) {
         type: 'doughnut',
         data: {
             labels,
-            datasets: [{ data, backgroundColor: colors || [c.positive, c.negative, c.warning], borderWidth: 0 }],
+            datasets: [{ data, backgroundColor: colors || [c.positive, c.warning, c.negative], borderWidth: 0 }],
         },
         options: {
             responsive: true,

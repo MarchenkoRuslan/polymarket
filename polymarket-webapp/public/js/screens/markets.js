@@ -5,10 +5,15 @@ import { navigate } from '../router.js';
 const PAGE_SIZE = 20;
 let _offset = 0;
 let _filter = '';
+let _cachedItems = null;
+let _cachedVolume = {};
+let _cachedPrice = {};
+let _cachedSignals = {};
 
 export async function render(container) {
     _offset = 0;
     _filter = '';
+    _cachedItems = null;
 
     container.innerHTML = `
         <div class="screen">
@@ -28,95 +33,104 @@ export async function render(container) {
         debounce = setTimeout(() => {
             _filter = searchInput.value.trim().toLowerCase();
             _offset = 0;
-            _loadMarkets(container, false);
+            _renderPage(container);
         }, 300);
     });
 
-    await _loadMarkets(container, false);
+    await _fetchAndRender(container);
 }
 
-async function _loadMarkets(container, append) {
+async function _fetchAndRender(container) {
     const listEl = container.querySelector('#markets-list');
-    const moreEl = container.querySelector('#markets-more');
-
-    if (!append) {
-        showLoading(listEl);
-        moreEl.innerHTML = '';
-    }
+    showLoading(listEl);
 
     try {
-        const [marketsData, analyticsData] = await Promise.all([
+        const [marketsData, analyticsData, signalsData] = await Promise.all([
             api.getMarkets(200, 0, false),
             api.getAnalytics().catch(() => null),
+            api.getSignals(undefined, 500).catch(() => ({ items: [] })),
         ]);
 
-        const signalsData = await api.getSignals(undefined, 500).catch(() => ({ items: [] }));
-
-        const latestSignals = {};
+        _cachedSignals = {};
         (signalsData.items || []).forEach(s => {
-            if (!latestSignals[s.market_id] || s.ts > latestSignals[s.market_id].ts) {
-                latestSignals[s.market_id] = s;
+            if (!_cachedSignals[s.market_id] || s.ts > _cachedSignals[s.market_id].ts) {
+                _cachedSignals[s.market_id] = s;
             }
         });
 
-        const volumeMap = {};
-        const priceMap = {};
+        _cachedVolume = {};
+        _cachedPrice = {};
         (analyticsData?.trade_stats || []).forEach(t => {
-            volumeMap[t.market_id] = t.total_volume;
-            priceMap[t.market_id] = t.avg_price;
+            _cachedVolume[t.market_id] = t.total_volume;
+            _cachedPrice[t.market_id] = t.avg_price;
         });
 
-        let items = marketsData.items || [];
-        if (_filter) {
-            items = items.filter(m =>
-                (m.question || '').toLowerCase().includes(_filter) ||
-                (m.event || '').toLowerCase().includes(_filter) ||
-                m.market_id.toLowerCase().includes(_filter)
-            );
-        }
+        _cachedItems = (marketsData.items || []).slice();
+        _cachedItems.sort((a, b) => (_cachedVolume[b.market_id] || 0) - (_cachedVolume[a.market_id] || 0));
 
-        items.sort((a, b) => (volumeMap[b.market_id] || 0) - (volumeMap[a.market_id] || 0));
-
-        const page = items.slice(_offset, _offset + PAGE_SIZE);
-
-        if (!append) listEl.innerHTML = '';
-
-        if (page.length === 0 && _offset === 0) {
-            showEmpty(listEl, '📊', 'No markets found', _filter ? 'Try a different search' : 'Markets will appear after data collection');
-            return;
-        }
-
-        page.forEach(m => {
-            const sig = latestSignals[m.market_id];
-            const card = document.createElement('div');
-            card.className = 'market-card';
-            card.innerHTML = `
-                <div class="market-card-body">
-                    <div class="market-card-question">${_esc(truncate(m.question || m.market_id, 70))}</div>
-                    <div class="market-card-meta">
-                        ${volumeMap[m.market_id] ? `<span>Vol: ${formatNumber(volumeMap[m.market_id])}</span>` : ''}
-                        ${sig ? signalBadge(sig.signal_label) : ''}
-                        ${m.outcome_settled ? '<span class="badge badge-info">Settled</span>' : ''}
-                    </div>
-                </div>
-                <div class="market-card-right">
-                    ${priceMap[m.market_id] != null ? `<div class="market-card-price">${formatPrice(priceMap[m.market_id])}</div>` : ''}
-                    <div class="card-chevron">›</div>
-                </div>`;
-            card.addEventListener('click', () => navigate(`market/${encodeURIComponent(m.market_id)}`));
-            listEl.appendChild(card);
-        });
-
-        _offset += page.length;
-
-        if (_offset < items.length) {
-            moreEl.innerHTML = `<button class="btn btn-secondary" id="btn-load-more">Load more (${items.length - _offset} remaining)</button>`;
-            moreEl.querySelector('#btn-load-more').addEventListener('click', () => _loadMarkets(container, true));
-        } else {
-            moreEl.innerHTML = `<div class="text-center text-secondary" style="font-size:13px;padding:8px">${items.length} market${items.length !== 1 ? 's' : ''}</div>`;
-        }
+        _renderPage(container);
     } catch (err) {
-        if (!append) showError(listEl, err.message);
+        showError(listEl, err.message);
+    }
+}
+
+function _getFiltered() {
+    if (!_cachedItems) return [];
+    if (!_filter) return _cachedItems;
+    return _cachedItems.filter(m =>
+        (m.question || '').toLowerCase().includes(_filter) ||
+        (m.event || '').toLowerCase().includes(_filter) ||
+        m.market_id.toLowerCase().includes(_filter)
+    );
+}
+
+function _renderPage(container) {
+    const listEl = container.querySelector('#markets-list');
+    const moreEl = container.querySelector('#markets-more');
+    if (!listEl || !moreEl) return;
+
+    const items = _getFiltered();
+    const page = items.slice(0, _offset + PAGE_SIZE);
+
+    listEl.innerHTML = '';
+
+    if (page.length === 0) {
+        showEmpty(listEl, '📊', 'No markets found', _filter ? 'Try a different search' : 'Markets will appear after data collection');
+        moreEl.innerHTML = '';
+        return;
+    }
+
+    page.forEach(m => {
+        const sig = _cachedSignals[m.market_id];
+        const card = document.createElement('div');
+        card.className = 'market-card';
+        card.innerHTML = `
+            <div class="market-card-body">
+                <div class="market-card-question">${_esc(truncate(m.question || m.market_id, 70))}</div>
+                <div class="market-card-meta">
+                    ${_cachedVolume[m.market_id] ? `<span>Vol: ${formatNumber(_cachedVolume[m.market_id])}</span>` : ''}
+                    ${sig ? signalBadge(sig.signal_label) : ''}
+                    ${m.outcome_settled ? '<span class="badge badge-info">Settled</span>' : ''}
+                </div>
+            </div>
+            <div class="market-card-right">
+                ${_cachedPrice[m.market_id] != null ? `<div class="market-card-price">${formatPrice(_cachedPrice[m.market_id])}</div>` : ''}
+                <div class="card-chevron">›</div>
+            </div>`;
+        card.addEventListener('click', () => navigate(`market/${encodeURIComponent(m.market_id)}`));
+        listEl.appendChild(card);
+    });
+
+    _offset = page.length;
+
+    if (_offset < items.length) {
+        moreEl.innerHTML = `<button class="btn btn-secondary" id="btn-load-more">Load more (${items.length - _offset} remaining)</button>`;
+        moreEl.querySelector('#btn-load-more').addEventListener('click', () => {
+            _offset += PAGE_SIZE;
+            _renderPage(container);
+        });
+    } else {
+        moreEl.innerHTML = `<div class="text-center text-secondary" style="font-size:13px;padding:8px">${items.length} market${items.length !== 1 ? 's' : ''}</div>`;
     }
 }
 

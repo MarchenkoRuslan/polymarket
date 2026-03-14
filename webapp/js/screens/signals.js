@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { formatPrice, signalBadge, truncate, showLoading, showEmpty, showError } from '../utils.js';
+import { signalBadge, truncate, showLoading, showEmpty, showError } from '../utils.js';
 import { createBarChart, createDoughnutChart } from '../charts.js';
 import { getChartColors } from '../theme.js';
 import { navigate } from '../router.js';
