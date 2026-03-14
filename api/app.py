@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
-from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 
 from api.routes import router
 import server
@@ -70,15 +70,6 @@ def favicon():
     return Response(status_code=204)
 
 
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-
-
-@app.get("/dashboard", include_in_schema=False)
-async def dashboard(request: Request):
-    """Simple dashboard: Status, Markets table, Trades chart."""
-    return templates.TemplateResponse("dashboard.html", {"request": request})
-
-
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     """Simple in-memory sliding-window rate limiter per client IP."""
@@ -109,3 +100,7 @@ async def cache_control_middleware(request: Request, call_next):
 
 
 app.include_router(router)
+
+_webapp_dir = Path(__file__).resolve().parent.parent / "webapp"
+if _webapp_dir.is_dir():
+    app.mount("/webapp", StaticFiles(directory=str(_webapp_dir), html=True), name="webapp")
