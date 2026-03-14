@@ -10,7 +10,8 @@ Automated system for trading on Polymarket prediction markets. Full pipeline: da
 
 | Service | Path | Task |
 |---------|------|------|
-| **Web API** | `api/` | FastAPI, Swagger UI (`/docs`), Dashboard (`/dashboard`). Endpoints: markets, trades, orderbook, signals, features, news, results, analytics, status. Lifespan: init_db + pipeline in background |
+| **Web API** | `api/` | FastAPI, Swagger UI (`/docs`), Web App (`/webapp`). Endpoints: markets, trades, orderbook, signals, features, news, results, analytics, status. Lifespan: init_db + pipeline in background |
+| **Web App** | `webapp/` | Telegram Web App (Mini App) — mobile-first SPA dashboard. Vanilla JS + ES modules, Chart.js, Telegram theme integration. Served as static files at `/webapp` |
 | Web Server | `server.py` | uvicorn + same FastAPI app. Pipeline in background. For Railway/production |
 | Data Collector | `services/collector/` | Polymarket API (Gamma, CLOB with optional L2 auth), PMXT Parquet → `markets`, `trades`, `orderbook`. Filters to liquid markets only |
 | News Collector | `services/news_collector/` | RSS (synchronous) → keyword filter → `news` table |
@@ -18,6 +19,7 @@ Automated system for trading on Polymarket prediction markets. Full pipeline: da
 | ML Module | `services/ml_module/` | LR, RF, XGBoost, walk-forward → signals in `signals`. Skips flat-price markets, uses multi-period target horizon |
 | Backtester | `services/backtester/` | Simulation with fees, slippage. Signals: 1=buy, 0=hold, -1=sell |
 | Execution Bot | `services/execution_bot/` | py-clob-client, risk management (Kelly, limits, stop-loss). Default dry_run |
+| Telegram Bot | `services/telegram_bot/` | aiogram 3.x bot: /start command, menu button → opens Web App |
 
 ## Pipeline Flow
 
@@ -72,6 +74,8 @@ Default interval: 1 hour (`COLLECT_INTERVAL_SEC=3600`).
 | `ML_MARKETS_LIMIT` | `20` | Max markets for ML training |
 | `FEATURE_MARKETS_LIMIT` | `50` | Max markets for feature computation |
 | `BACKTEST_MARKETS_LIMIT` | `15` | Max markets for backtesting |
+| `TELEGRAM_BOT_TOKEN` | (empty) | Telegram bot token from BotFather |
+| `WEBAPP_URL` | (empty) | HTTPS URL of Web App (e.g. https://your-domain.com/webapp) |
 
 ## Common Tasks
 
@@ -98,6 +102,9 @@ python -m services.feature_store.main
 python -m services.ml_module.main
 python -m services.backtester.main
 python -m services.execution_bot.main
+
+# Telegram bot (opens Web App dashboard in Telegram)
+python -m services.telegram_bot.main
 
 # Features + ML without collector (for cron, if collector runs separately)
 python scripts/run_pipeline.py

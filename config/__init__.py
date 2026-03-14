@@ -16,6 +16,8 @@ from config.settings import (
     ML_TARGET_HORIZON,
     BACKTEST_MARKETS_LIMIT,
     MIN_MARKET_VOLUME,
+    TELEGRAM_BOT_TOKEN,
+    WEBAPP_URL,
     SKIP_ML_FIRST_RUN,
 )
 
@@ -37,5 +39,7 @@ __all__ = [
     "ML_TARGET_HORIZON",
     "BACKTEST_MARKETS_LIMIT",
     "MIN_MARKET_VOLUME",
+    "TELEGRAM_BOT_TOKEN",
+    "WEBAPP_URL",
     "SKIP_ML_FIRST_RUN",
 ]

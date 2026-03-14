@@ -85,5 +85,9 @@ BACKTEST_MARKETS_LIMIT = _parse_int("BACKTEST_MARKETS_LIMIT", "15")
 # Target horizon for ML (how many periods ahead to predict)
 ML_TARGET_HORIZON = _parse_int("ML_TARGET_HORIZON", "5")
 
+# Telegram bot
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "")
+
 # Skip ML and backtest on first pipeline run (faster dashboard data, full run on next cycle)
 SKIP_ML_FIRST_RUN = os.getenv("SKIP_ML_FIRST_RUN", "true").lower() in ("1", "true", "yes")
