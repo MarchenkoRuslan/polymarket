@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-prod.txt .
-RUN --mount=type=cache,target=/root/.cache/pip \
+RUN --mount=type=cache,id=polymarket-pip,target=/root/.cache/pip \
     pip install --no-cache-dir -r requirements-prod.txt
 
 COPY . .
