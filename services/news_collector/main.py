@@ -21,7 +21,7 @@ DEFAULT_FEEDS = [
     "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "https://cointelegraph.com/rss",
     "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml",
-    "https://feeds.reuters.com/reuters/topNews",
+    "https://news.google.com/rss/search?q=economy+OR+election+OR+congress&hl=en-US&gl=US&ceid=US:en",
 ]
 
 KEYWORDS = [

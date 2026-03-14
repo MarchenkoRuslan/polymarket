@@ -187,36 +187,66 @@ async def collect_from_api():
             token_ids = _parse_clob_token_ids(m.get("clobTokenIds"))
             asset_id = token_ids[0] if token_ids else mid
 
-            history = []
+            real_trades_loaded = 0
             try:
-                history = await client.get_prices_history(asset_id, interval="max")
-            except Exception as e:
-                logger.debug("Price history for %s unavailable: %s", mid, e)
-            for pt in history:
-                ts_raw = pt.get("t") or pt.get("timestamp") or pt.get("ts")
-                if ts_raw is None:
-                    continue
-                ts = datetime.fromtimestamp(
-                    ts_raw / 1000 if ts_raw > 1e12 else ts_raw, tz=timezone.utc
-                )
-                price = float(pt.get("p", pt.get("price", 0)))
-                if price <= 0 or price >= 1:
-                    continue
-                insert_trade(session, mid, ts, price, 1.0, "buy")
-                loaded += 1
-            if not history:
-                price_val = None
-                last_trade = m.get("lastTradePrice")
-                if last_trade is not None:
-                    try:
-                        price_val = float(last_trade)
-                    except (TypeError, ValueError):
-                        price_val = None
-                if price_val is None or not (0 < price_val < 1):
-                    price_val = _parse_outcome_prices(m.get("outcomePrices"))
-                if price_val is not None and 0 < price_val < 1:
-                    insert_trade(session, mid, now, price_val, 1.0, "buy")
+                raw_trades = await client.get_trades(market_id=mid, limit=100)
+                for rt in raw_trades:
+                    ts_raw = rt.get("t") or rt.get("timestamp") or rt.get("ts") or rt.get("match_time")
+                    if ts_raw is None:
+                        continue
+                    if isinstance(ts_raw, str):
+                        try:
+                            ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+                        except (ValueError, TypeError):
+                            continue
+                    else:
+                        ts = datetime.fromtimestamp(
+                            ts_raw / 1000 if ts_raw > 1e12 else ts_raw, tz=timezone.utc
+                        )
+                    price = float(rt.get("price", 0))
+                    if price <= 0 or price >= 1:
+                        continue
+                    size = float(rt.get("size", rt.get("amount", 1.0)))
+                    side = str(rt.get("side", rt.get("type", "buy"))).lower()
+                    if side not in ("buy", "sell"):
+                        side = "buy"
+                    insert_trade(session, mid, ts, price, size, side)
+                    real_trades_loaded += 1
                     loaded += 1
+            except Exception as e:
+                logger.debug("CLOB trades for %s unavailable: %s", mid, e)
+
+            if real_trades_loaded == 0:
+                history = []
+                try:
+                    history = await client.get_prices_history(asset_id, interval="max")
+                except Exception as e:
+                    logger.debug("Price history for %s unavailable: %s", mid, e)
+                for pt in history:
+                    ts_raw = pt.get("t") or pt.get("timestamp") or pt.get("ts")
+                    if ts_raw is None:
+                        continue
+                    ts = datetime.fromtimestamp(
+                        ts_raw / 1000 if ts_raw > 1e12 else ts_raw, tz=timezone.utc
+                    )
+                    price = float(pt.get("p", pt.get("price", 0)))
+                    if price <= 0 or price >= 1:
+                        continue
+                    insert_trade(session, mid, ts, price, 1.0, "buy")
+                    loaded += 1
+                if not history:
+                    price_val = None
+                    last_trade = m.get("lastTradePrice")
+                    if last_trade is not None:
+                        try:
+                            price_val = float(last_trade)
+                        except (TypeError, ValueError):
+                            price_val = None
+                    if price_val is None or not (0 < price_val < 1):
+                        price_val = _parse_outcome_prices(m.get("outcomePrices"))
+                    if price_val is not None and 0 < price_val < 1:
+                        insert_trade(session, mid, now, price_val, 1.0, "buy")
+                        loaded += 1
 
             ob_ok = await _collect_orderbook(client, session, m, mid, asset_id, now)
             if ob_ok:

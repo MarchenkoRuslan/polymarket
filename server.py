@@ -137,13 +137,24 @@ def run_news():
     try:
         import asyncio
         from services.news_collector.main import main as news_main
+        logger.info("Starting News Collector")
         asyncio.run(news_main())
+        logger.info("News Collector completed")
     except Exception as e:
-        logger.warning("News Collector error (non-fatal): %s", e)
+        logger.warning("News Collector error (non-fatal): %s", e, exc_info=True)
+
+
+def run_backtest():
+    """Run Backtester (blocking). Errors are non-fatal for the pipeline."""
+    try:
+        from services.backtester.main import main as bt_main
+        bt_main()
+    except Exception as e:
+        logger.warning("Backtester error (non-fatal): %s", e)
 
 
 def run_pipeline():
-    """Run full pipeline: collector → news → feature_store → ml_module."""
+    """Run full pipeline: collector → news → feature_store → ml_module → backtester."""
     global _last_pipeline_error
     with _state_lock:
         _last_pipeline_error = None
@@ -167,6 +178,7 @@ def run_pipeline():
     except Exception as e:
         with _state_lock:
             _last_pipeline_error = str(e)
+    run_backtest()
     logger.info("Pipeline cycle completed")
 
 
