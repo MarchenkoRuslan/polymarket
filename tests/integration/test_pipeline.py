@@ -183,3 +183,55 @@ def test_db_writer_upsert_fee_rate_multiple_tokens(db_session):
     ).fetchone()
     assert r1[0] == 20
     assert r2[0] == 40
+
+
+def test_cleanup_retention_deletes_old_rows(sqlite_db, monkeypatch):
+    """cleanup_retention removes rows with ts older than DATA_RETENTION_DAYS; keeps recent rows."""
+    import importlib
+
+    engine, Session = sqlite_db
+    monkeypatch.setenv("DATA_RETENTION_DAYS", "1")
+
+    session = Session()
+    old_ts = datetime.now(timezone.utc) - timedelta(days=2)
+    new_ts = datetime.now(timezone.utc)
+    session.execute(
+        text(
+            "INSERT INTO trades (ts, market_id, price, size, side) "
+            "VALUES (:ts, :m, :p, :s, :side)"
+        ),
+        {"ts": old_ts, "m": "m_ret", "p": 0.5, "s": 1.0, "side": "buy"},
+    )
+    session.execute(
+        text(
+            "INSERT INTO trades (ts, market_id, price, size, side) "
+            "VALUES (:ts, :m, :p, :s, :side)"
+        ),
+        {"ts": new_ts, "m": "m_ret", "p": 0.6, "s": 1.0, "side": "buy"},
+    )
+    session.commit()
+    session.close()
+
+    assert Session().execute(text("SELECT COUNT(*) FROM trades")).scalar() == 2
+
+    import config.settings as settings_module
+    import config
+    import db
+    import server
+
+    importlib.reload(settings_module)
+    importlib.reload(config)
+    importlib.reload(db)
+    importlib.reload(server)
+    server.cleanup_retention()
+
+    session2 = Session()
+    count = session2.execute(text("SELECT COUNT(*) FROM trades")).scalar()
+    session2.close()
+    assert count == 1
+    session3 = Session()
+    row = session3.execute(
+        text("SELECT price FROM trades WHERE market_id = 'm_ret'")
+    ).fetchone()
+    session3.close()
+    assert row[0] == 0.6

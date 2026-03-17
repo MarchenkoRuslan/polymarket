@@ -91,3 +91,6 @@ WEBAPP_URL = os.getenv("WEBAPP_URL", "")
 
 # Skip ML and backtest on first pipeline run (faster dashboard data, full run on next cycle)
 SKIP_ML_FIRST_RUN = os.getenv("SKIP_ML_FIRST_RUN", "true").lower() in ("1", "true", "yes")
+
+# Data retention: delete rows older than N days from trades, orderbook, features, news, signals, results
+DATA_RETENTION_DAYS = _parse_int("DATA_RETENTION_DAYS", "90")

@@ -24,7 +24,7 @@ Automated system for trading on Polymarket prediction markets. Full pipeline: da
 ## Pipeline Flow
 
 ```
-cleanup_stale_data (dedup trades)
+cleanup_stale_data (dedup trades) → cleanup_retention (delete rows older than DATA_RETENTION_DAYS)
        ↓
    collector (Gamma API → markets; CLOB auth or prices-history → trades; orderbook)
        ↓
@@ -76,6 +76,7 @@ Default interval: 1 hour (`COLLECT_INTERVAL_SEC=3600`).
 | `BACKTEST_MARKETS_LIMIT` | `15` | Max markets for backtesting |
 | `TELEGRAM_BOT_TOKEN` | (empty) | Telegram bot token from BotFather |
 | `WEBAPP_URL` | (empty) | HTTPS URL of deployed [polymarket-ui](https://github.com/MarchenkoRuslan/polymarket-ui) |
+| `DATA_RETENTION_DAYS` | `90` | Delete rows with `ts` older than N days from trades, orderbook, features, news, signals, results. Set to 0 to disable. On PostgreSQL, VACUUM runs after retention cleanup to reclaim disk. |
 
 ## Common Tasks
 
@@ -85,6 +86,7 @@ Default interval: 1 hour (`COLLECT_INTERVAL_SEC=3600`).
 - **Risk**: `services/execution_bot/risk.py` (RiskConfig, position_size, should_stop_loss).
 - **Add config variable**: `config/settings.py` → `config/__init__.py` → `.env.example`.
 - **Add DB migration**: `db/migrations/versions/NNN_description.py` (see existing for pattern).
+- **Limit DB disk usage**: retention is applied in `server.cleanup_retention()` each pipeline cycle; configure `DATA_RETENTION_DAYS` (see [docs/RETENTION_TUNING.md](docs/RETENTION_TUNING.md) for shorter per-table suggestions).
 
 ## Run
 

@@ -55,13 +55,13 @@ async def run_bot() -> None:
         if WEBAPP_URL:
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
-                    text="Open Dashboard",
+                    text="Открыть дашборд",
                     web_app=WebAppInfo(url=WEBAPP_URL),
                 )],
             ])
         await message.answer(
-            "Welcome to Polymarket Trading Bot!\n\n"
-            "Open the dashboard to see live markets, ML signals, and performance.",
+            "Добро пожаловать в Polymarket Trading Bot!\n\n"
+            "Откройте дашборд, чтобы смотреть рынки, ML-сигналы и результаты.",
             reply_markup=kb,
         )
 
@@ -69,7 +69,7 @@ async def run_bot() -> None:
         try:
             await bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(
-                    text="Dashboard",
+                    text="Дашборд",
                     web_app=WebAppInfo(url=WEBAPP_URL),
                 ),
             )

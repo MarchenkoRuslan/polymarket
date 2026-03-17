@@ -3,8 +3,9 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 
-from config import SKIP_ML_FIRST_RUN
+from config import DATA_RETENTION_DAYS, DATABASE_URL, SKIP_ML_FIRST_RUN
 
 logger = logging.getLogger(__name__)
 
@@ -184,8 +185,55 @@ def cleanup_stale_data():
         logger.warning("Data cleanup error (non-fatal): %s", e)
 
 
+def cleanup_retention():
+    """Delete rows older than DATA_RETENTION_DAYS from time-series tables.
+
+    Tables: features, signals, results, orderbook, trades, news.
+    Uses parameterized cutoff for PostgreSQL/SQLite compatibility.
+    """
+    if DATA_RETENTION_DAYS <= 0:
+        return
+    try:
+        from db import SessionLocal
+        from sqlalchemy import text
+
+        session = SessionLocal()
+        cutoff = datetime.now(timezone.utc) - timedelta(days=DATA_RETENTION_DAYS)
+        tables = ("features", "signals", "results", "orderbook", "trades", "news")
+        try:
+            for table in tables:
+                try:
+                    r = session.execute(
+                        text(f"DELETE FROM {table} WHERE ts < :cutoff"),
+                        {"cutoff": cutoff},
+                    )
+                    deleted = r.rowcount
+                    if deleted:
+                        logger.info("Cleanup retention: %s: removed %d rows", table, deleted)
+                except Exception as e:
+                    logger.warning("Cleanup retention %s failed (non-fatal): %s", table, e)
+            session.commit()
+
+            # Reclaim disk space on PostgreSQL after deletes (VACUUM cannot run inside a transaction)
+            if (DATABASE_URL or "").strip().lower().startswith("postgresql"):
+                try:
+                    from db import engine
+                    with engine.connect() as vac_conn:
+                        vac_conn = vac_conn.execution_options(
+                            isolation_level="AUTOCOMMIT"
+                        )
+                        vac_conn.execute(text("VACUUM"))
+                    logger.info("Cleanup retention: VACUUM completed")
+                except Exception as e:
+                    logger.warning("VACUUM failed (non-fatal): %s", e)
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning("Data retention cleanup error (non-fatal): %s", e)
+
+
 def run_pipeline(*, skip_ml: bool = False):
-    """Run pipeline: cleanup → collector → news → feature_store → [ml_module → backtester].
+    """Run pipeline: cleanup (dedup + retention) → collector → news → feature_store → [ml_module → backtester].
 
     When skip_ml=True (first run with SKIP_ML_FIRST_RUN), runs only collector + news + features
     for faster initial dashboard data; ML and backtest run on the next cycle.
@@ -194,6 +242,7 @@ def run_pipeline(*, skip_ml: bool = False):
     with _state_lock:
         _last_pipeline_error = None
     cleanup_stale_data()
+    cleanup_retention()
     try:
         run_collect()
     except Exception as e:

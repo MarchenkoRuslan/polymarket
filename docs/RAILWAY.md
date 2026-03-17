@@ -24,6 +24,7 @@ Add to service Settings → Variables:
 | `COLLECT_INTERVAL_SEC` | `3600` (1 hour) | optional |
 | `COLLECT_DEFER_SEC` | `5` | optional |
 | `SKIP_ML_FIRST_RUN` | `true` | optional — skip ML/backtest on first run for faster initial dashboard data |
+| `DATA_RETENTION_DAYS` | `90` | optional — delete rows older than N days (trades, orderbook, features, news, signals, results). Reduces disk usage. Set to 0 to disable. |
 | `MIN_MARKET_VOLUME` | `1000` | optional |
 | `ML_TARGET_HORIZON` | `5` | optional |
 
@@ -68,8 +69,9 @@ UI dashboard is deployed separately from [polymarket-ui](https://github.com/Marc
 
 **Background pipeline** (automatic, every hour):
 ```
-cleanup (dedup trades) → collector → news → features → ML → backtest
+cleanup (dedup trades + retention delete) → collector → news → features → ML → backtest
 ```
+Retention removes rows older than `DATA_RETENTION_DAYS` from time-series tables; on PostgreSQL, VACUUM runs after to reclaim disk.
 
 With `SKIP_ML_FIRST_RUN=true` (default), the first run is light: collector + news + features only. API returns markets, trades, orderbook, features within 2–5 min. ML and backtest run on the next cycle (~1 hour later).
 
@@ -120,6 +122,12 @@ Causes:
 - News collector fetches RSS from Google News, CoinDesk, CoinTelegraph, NY Times
 - Some hosting environments may block outgoing HTTP to RSS feeds
 - Check logs for "RSS failed" or "timed out" warnings
+
+### High volume / disk usage (PostgreSQL volume near full)
+
+- **Retention**: set `DATA_RETENTION_DAYS=90` (or lower, e.g. 30) so each pipeline cycle deletes old rows from trades, orderbook, features, news, signals, results. Default 90 keeps disk growth bounded.
+- **VACUUM**: after retention deletes, the app runs `VACUUM` on PostgreSQL to reclaim space. First run after enabling retention may free several GB.
+- For more aggressive tuning (e.g. 7 days for orderbook/news), see [RETENTION_TUNING.md](RETENTION_TUNING.md).
 
 ### ML "single class in data"
 

@@ -19,6 +19,7 @@ from config.settings import (
     TELEGRAM_BOT_TOKEN,
     WEBAPP_URL,
     SKIP_ML_FIRST_RUN,
+    DATA_RETENTION_DAYS,
 )
 
 __all__ = [
@@ -42,4 +43,5 @@ __all__ = [
     "TELEGRAM_BOT_TOKEN",
     "WEBAPP_URL",
     "SKIP_ML_FIRST_RUN",
+    "DATA_RETENTION_DAYS",
 ]

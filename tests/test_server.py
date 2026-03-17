@@ -29,9 +29,10 @@ def test_run_collect_stores_error_and_reraises():
 
 
 def test_run_pipeline_calls_cleanup_collect_news_features_ml_backtest():
-    """run_pipeline invokes cleanup, collect, news, features, ml, backtest sequentially."""
+    """run_pipeline invokes cleanup, retention, collect, news, features, ml, backtest sequentially."""
     with (
         patch("server.cleanup_stale_data") as mock_clean,
+        patch("server.cleanup_retention") as mock_retention,
         patch("server.run_collect") as mock_c,
         patch("server.run_news") as mock_n,
         patch("server.run_features") as mock_f,
@@ -40,6 +41,7 @@ def test_run_pipeline_calls_cleanup_collect_news_features_ml_backtest():
     ):
         run_pipeline()
         mock_clean.assert_called_once()
+        mock_retention.assert_called_once()
         mock_c.assert_called_once()
         mock_n.assert_called_once()
         mock_f.assert_called_once()
@@ -52,6 +54,7 @@ def test_run_pipeline_catches_errors():
     import server
     with (
         patch("server.cleanup_stale_data"),
+        patch("server.cleanup_retention"),
         patch("server.run_collect", side_effect=RuntimeError("boom")),
     ):
         run_pipeline()
@@ -62,6 +65,7 @@ def test_run_pipeline_skips_ml_when_features_fail():
     """run_pipeline skips ML and backtest when feature computation fails."""
     with (
         patch("server.cleanup_stale_data"),
+        patch("server.cleanup_retention"),
         patch("server.run_collect") as mock_c,
         patch("server.run_news") as mock_n,
         patch("server.run_features", side_effect=RuntimeError("features broke")) as mock_f,
